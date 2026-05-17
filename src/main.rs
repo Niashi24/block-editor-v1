@@ -4,7 +4,7 @@
 //! as they provide a consistent reference for the orientation of objects
 //! and an evenly spaced grid to judge relative scale.
 
-mod save;
+mod tilemap;
 
 use std::collections::{HashMap, HashSet};
 
@@ -18,7 +18,7 @@ use bevy::{
 use bevy::dev_tools::fps_overlay::*;
 use snafu::{OptionExt, Whatever};
 
-use crate::save::Tilemap;
+use crate::tilemap::Tilemap;
 
 fn main() {
     App::new()
@@ -39,6 +39,7 @@ fn main() {
 fn setup_system(
     mut commands: Commands,
     mesh_data: Res<MeshData>,
+    asset_server: Res<AssetServer>,
 ) {
 
     commands.spawn((
