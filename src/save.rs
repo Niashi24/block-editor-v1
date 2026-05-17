@@ -1,9 +1,8 @@
 use std::{collections::BTreeMap, fs, io::Write};
 
-use bevy::{asset::{Handle, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::Commands}, math::{Dir3, IVec3, Quat, Vec2, Vec3, primitives::Plane3d}, mesh::{Mesh, Mesh3d, MeshBuilder, MeshVertexAttributeId, Meshable}, pbr::{MeshMaterial3d, StandardMaterial}, platform::collections::HashMap, transform::components::Transform};
+use bevy::{asset::RenderAssetUsages, ecs::{component::Component, entity::Entity, system::Commands}, math::{Dir3, IVec3, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::MeshMaterial3d, platform::collections::HashMap, transform::components::Transform};
 
-use gltf_json::{self as gltf, Accessor, Index, validation::{Checked, USize64}};
-use wgpu_types::WriteOnly;
+use gltf_json::{self as gltf, Accessor, validation::{Checked, USize64}};
 
 use crate::MeshData;
 
@@ -30,12 +29,10 @@ impl Tilemap {
 
     pub fn save(&self) {
 
-        let mesh = self.to_mesh();
-
         let mut root = gltf::Root::default();
 
         let meshes = [
-            Plane3d::new(Vec3::Y, Vec2::splat(0.5)).mesh().build()
+            self.create_mesh()
         ];
 
         let mut buf = Vec::new();
@@ -51,22 +48,7 @@ impl Tilemap {
         }
         let mut mesh_buffers = Vec::with_capacity(meshes.len());
         for mesh in meshes {
-            // let position = mesh.attribute(Mesh::ATTRIBUTE_POSITION.id).unwrap();
-            // let pos_start = buffer.len();
-            // buffer.extend_from_slice(position.get_bytes());
-            // pad_to_4(&mut buffer);
 
-            // let normal = mesh.attribute(Mesh::ATTRIBUTE_NORMAL.id).unwrap();
-            // let normal_start = buffer.len();
-            // buffer.extend_from_slice(normal.get_bytes());
-            // pad_to_4(&mut buffer);
-
-            // let uv = mesh.attribute(Mesh::ATTRIBUTE_UV_0.id).unwrap();
-            // let uv_start = buffer.len();
-            // buffer.extend_from_slice(uv.get_bytes());
-            // pad_to_4(&mut buffer);
-            // mesh.create_packed_vertex_buffer_data()
-            //
             let position = mesh.attribute(Mesh::ATTRIBUTE_POSITION.id).unwrap();
             let mut min = [f32::MAX; 3];
             let mut max = [f32::MIN; 3];
@@ -102,13 +84,8 @@ impl Tilemap {
             };
 
             pad_to_4(&mut buf);
-            // indices.
 
             mesh_buffers.push(MeshBuffer {
-                // position: (pos_start, normal_start - pos_start),
-                // normal: (normal_start, uv_start - normal_start),
-                // uv: (uv_start, buffer.len() - uv_start),
-
                 min_position: min,
                 max_position: max,
                 offset: start_index,
@@ -129,14 +106,7 @@ impl Tilemap {
 
         const VERTEX_SIZE: usize = 32; // 12 + 12 + 8
 
-        struct Accessors {
-            position: Index<Accessor>,
-            normal: Index<Accessor>,
-            uv: Index<Accessor>,
-            indices: Index<Accessor>,
-        }
-
-        let mut accessors = Vec::with_capacity(mesh_buffers.len());
+        let mut primitives = Vec::new();
 
         for view in mesh_buffers {
             let buffer_view = root.push(gltf::buffer::View {
@@ -236,54 +206,43 @@ impl Tilemap {
 
             });
 
-            accessors.push(Accessors {
-                position,
-                normal,
-                uv,
-                indices,
-            })
+            let primitive = gltf::mesh::Primitive {
+                attributes: {
+                    let mut map = BTreeMap::new();
+                    map.insert(Checked::Valid(gltf::mesh::Semantic::Positions), position);
+                    map.insert(Checked::Valid(gltf::mesh::Semantic::Normals), normal);
+                    map.insert(Checked::Valid(gltf::mesh::Semantic::TexCoords(0)), uv);
+                    map
+                },
+                extensions: Default::default(),
+                extras: Default::default(),
+                indices: Some(indices),
+                material: None,
+                mode: Checked::Valid(gltf::mesh::Mode::Triangles),
+                targets: None,
+            };
+
+            primitives.push(primitive);
         }
 
-        let plane_primitive = gltf::mesh::Primitive {
-            attributes: {
-                let mut map = BTreeMap::new();
-                map.insert(Checked::Valid(gltf::mesh::Semantic::Positions), accessors[0].position);
-                map.insert(Checked::Valid(gltf::mesh::Semantic::Normals), accessors[0].normal);
-                map.insert(Checked::Valid(gltf::mesh::Semantic::TexCoords(0)), accessors[0].uv);
-                map
-            },
-            extensions: Default::default(),
-            extras: Default::default(),
-            indices: Some(accessors[0].indices),
-            material: None,
-            mode: Checked::Valid(gltf::mesh::Mode::Triangles),
-            targets: None,
-        };
-
-        let plane_mesh = root.push(gltf::Mesh {
+        let mesh = root.push(gltf::Mesh {
             extensions: Default::default(),
             extras: Default::default(),
             name: None,
-            primitives: vec![plane_primitive],
+            primitives,
             weights: None,
         });
 
-        let mut nodes = Vec::new();
-        for transform in mesh.planes {
-            let node = root.push(gltf::Node {
-                mesh: Some(plane_mesh),
-                rotation: Some(gltf::scene::UnitQuaternion(transform.rotation.to_array())),
-                scale: Some(transform.scale.to_array()),
-                translation: Some(transform.translation.to_array()),
-                ..Default::default()
-            });
-            nodes.push(node);
-        }
+        let node = root.push(gltf::Node {
+            mesh: Some(mesh),
+            ..Default::default()
+        });
+
         root.push(gltf::Scene {
             extensions: Default::default(),
             extras: Default::default(),
             name: None,
-            nodes,
+            nodes: vec![node],
         });
 
         let _ = fs::create_dir("tilemap");
@@ -292,15 +251,15 @@ impl Tilemap {
 
         let mut writer = fs::File::create("tilemap/buffer0.bin").unwrap();
         writer.write_all(&buf).unwrap();
-        // let buffer_view
-
-
-        // root.push
 
     }
 
-    pub fn to_mesh(&self) -> TilemapMesh {
-        let mut planes = Vec::new();
+    pub fn create_mesh(&self) -> Mesh {
+        let mut mesh = Mesh::new(wgpu_types::PrimitiveTopology::TriangleList, RenderAssetUsages::default())
+            .with_inserted_indices(Indices::U32(vec![]))
+            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<Vec3>::new())
+            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, Vec::<[f32; 3]>::new())
+            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
 
         for (pos, tile) in self.tiles.iter() {
             match tile.tile_type {
@@ -309,24 +268,15 @@ impl Tilemap {
                     for dir in Dir::DIRS {
                         let new_pos = *pos + dir.as_ivec3();
                         if self.tiles.get(&new_pos).is_none_or(|tile| !tile.covers_dir(&dir.inv())) {
-                            let rotation = Quat::from_rotation_arc(Vec3::Y, *dir.as_dir3());
                             let translation = pos.as_vec3() + Vec3::splat(0.5) + 0.5 * dir.as_dir3();
-
-                            let transform = Transform {
-                                translation,
-                                rotation,
-                                ..Default::default()
+                            let plane = Plane3d {
+                                normal: dir.as_dir3(),
+                                half_size: Vec2::splat(0.5),
                             };
 
-                            planes.push(transform);
-
-                            // let plane = Plane3d {
-                            //     normal: dir.as_dir3(),
-                            //     half_size: Vec2::splat(0.5),
-                            // };
-
-                            // let mut plane_mesh = plane.mesh().build();
-                            // plane_mesh = plane_mesh.translated_by(pos.as_vec3() + Vec3::splat(0.5));
+                            let mut plane_mesh = plane.mesh().build();
+                            plane_mesh = plane_mesh.translated_by(translation);
+                            mesh.merge(&plane_mesh).unwrap();
                             // meshes.push(plane_mesh);
                         }
                     }
@@ -334,7 +284,7 @@ impl Tilemap {
             }
         }
 
-        TilemapMesh { planes }
+        mesh
     }
 }
 
@@ -349,7 +299,7 @@ pub struct TilemapMesh {
 }
 
 #[derive(Copy, Clone)]
-enum Dir {
+pub enum Dir {
     Z,
     NegZ,
     X,

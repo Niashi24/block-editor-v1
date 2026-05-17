@@ -65,18 +65,6 @@ fn setup_system(
 
     commands.spawn((Tilemap::default(), Transform::default(), Visibility::default()));
 
-    // cube
-    commands.spawn((
-        Mesh3d(mesh_data.cube_mesh.clone()),
-        MeshMaterial3d(mesh_data.cube_material.clone()),
-        Transform::from_xyz(0.0, 2.0, 0.0),
-    ));
-
-    commands.spawn((
-        Mesh3d(mesh_data.cube_mesh.clone()),
-        MeshMaterial3d(mesh_data.cube_material.clone()),
-        Transform::from_xyz(0.0, -2.0, 0.0),
-    ));
 }
 
 fn get_world_point(
