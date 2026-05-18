@@ -6,17 +6,15 @@
 
 mod tilemap;
 
-use std::collections::{HashMap, HashSet};
 
 use bevy::{
     // camera_controller::,
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::VectorSpace, prelude::*, window::CursorOptions
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, prelude::*, window::CursorOptions
 };
 
 
 
-use bevy::dev_tools::fps_overlay::*;
-use snafu::{OptionExt, ResultExt, Whatever, whatever};
+use snafu::{ResultExt, Whatever, whatever};
 
 use crate::tilemap::{Tilemap, TilemapCollision, TilemapData, TilemapRayHit, TilemapSaved, tilemap_coord_to_center};
 
@@ -105,16 +103,6 @@ fn setup_system(
     ));
 }
 
-fn get_world_point(
-    cursor_position: Vec2,
-    camera: &Camera,
-    camera_transform: &GlobalTransform,
-) -> Result<Vec3, Whatever> {
-    let ray = camera.viewport_to_world(camera_transform, cursor_position).unwrap();
-    let point = ray.plane_intersection_point(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y }).unwrap();
-    Ok(point)
-}
-
 pub fn intersect_plane_full(ray: &Ray3d, plane_origin: Vec3, plane: InfinitePlane3d) -> Option<f32> {
     let denominator = plane.normal.dot(*ray.direction);
     if ops::abs(denominator) <= f32::EPSILON {
@@ -125,19 +113,19 @@ pub fn intersect_plane_full(ray: &Ray3d, plane_origin: Vec3, plane: InfinitePlan
 }
 
 fn move_system(
-    mut camera: Single<(&mut Transform, &Camera, &GlobalTransform)>,
+    camera: Single<(&mut Transform, &Camera, &GlobalTransform)>,
     window: Single<&Window>,
     key_input: Res<ButtonInput<KeyCode>>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
     accumulated_mouse_scroll: Res<AccumulatedMouseScroll>,
-    mut cursor_options: Single<&mut CursorOptions>,
+    _cursor_options: Single<&mut CursorOptions>,
     time: Res<Time>,
-    mut gizmos: Gizmos,
+    _gizmos: Gizmos,
 ) {
-    let (mut camera_transform, camera, camera_gb_transform) = camera.into_inner();
+    let (mut camera_transform, _camera, _camera_gb_transform) = camera.into_inner();
 
-    let mut move_speed = 20.0;
+    let mut move_speed = 0.02;
     let mut rotate_speed = 2.0;
     let mut scroll_speed = 4.0;
     if key_input.pressed(KeyCode::ShiftLeft) {
@@ -186,7 +174,7 @@ fn move_system(
 
 
 
-    if let Some(cursor_position) = window.cursor_position()
+    if let Some(_cursor_position) = window.cursor_position()
     {
         // let previous = cursor_position - accumulated_mouse_motion.delta;
         // let previous_point = get_world_point(previous, camera, camera_gb_transform).unwrap();
@@ -217,7 +205,7 @@ fn move_system(
         //
 
         if mouse_input.pressed(MouseButton::Middle) {
-            camera_transform.translation += 0.01 * (accumulated_mouse_motion.delta.y * forward - accumulated_mouse_motion.delta.x * right);
+            camera_transform.translation += move_speed * (accumulated_mouse_motion.delta.y * forward - accumulated_mouse_motion.delta.x * right);
         }
 
     }
@@ -269,7 +257,7 @@ fn place_system(
     window: Single<&Window>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     key_input: Res<ButtonInput<KeyCode>>,
-    mesh_data: Res<MeshData>,
+    _mesh_data: Res<MeshData>,
     mut mesh_assets: ResMut<Assets<Mesh>>,
     mut gizmos: Gizmos,
     mut commands: Commands,

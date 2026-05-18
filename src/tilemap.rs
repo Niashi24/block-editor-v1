@@ -1,14 +1,13 @@
 use std::{collections::BTreeMap, f32, fs::{self, File}, io::{BufWriter, Write}};
 
-use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Ray3d, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::MeshMaterial3d, platform::collections::HashMap, transform::components::{GlobalTransform, Transform}};
+use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Ray3d, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, platform::collections::HashMap};
 
-use gltf_json::{self as gltf, Accessor, validation::{Checked, USize64}};
-use parry3d::{math::{Pose3, Rot3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::{Ray, RayCast}, shape::{Cuboid, Shape, ShapeType}};
+use gltf_json::{self as gltf, validation::{Checked, USize64}};
+use parry3d::{math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, Shape}};
 use serde::{Serialize, Deserialize};
 use snafu::{OptionExt, ResultExt, Whatever};
 use sscanf::sscanf;
 
-use crate::MeshData;
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -519,7 +518,7 @@ pub struct TileData {
 }
 
 impl TileData {
-    pub fn covers_dir(&self, dir: &Dir) -> bool {
+    pub fn covers_dir(&self, _dir: &Dir) -> bool {
         match self.tile_type {
             TileType::Cube => {
                 true
