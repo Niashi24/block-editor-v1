@@ -16,11 +16,12 @@ use bevy::{
 
 
 use bevy::dev_tools::fps_overlay::*;
-use snafu::{OptionExt, Whatever};
+use snafu::{OptionExt, ResultExt, Whatever, whatever};
 
-use crate::tilemap::Tilemap;
+use crate::tilemap::{Tilemap, TilemapCollision, TilemapData, TilemapRayHit, TilemapSaved, tilemap_coord_to_center};
 
 fn main() {
+
     App::new()
         .add_plugins((
             DefaultPlugins,
@@ -30,19 +31,57 @@ fn main() {
             //     ..Default::default()
             // },
         ))
-        .add_systems(Startup, setup_system)
+        .add_systems(Startup, (setup_system, spawn_tilemap))
         .add_systems(Update, (move_system, place_system))
         .init_resource::<MeshData>()
         .run();
 }
 
-fn setup_system(
+fn spawn_tilemap(
     mut commands: Commands,
     mesh_data: Res<MeshData>,
-    // mesh_assets: ResMut<Assets<Mesh>>,
+    mut mesh_assets: ResMut<Assets<Mesh>>,
+) {
+    let tilemap = load_tilemap().unwrap();
+
+    let tilemap_mesh = tilemap.data.create_mesh();
+
+    commands.spawn((
+        tilemap,
+        Transform::default(),
+        Visibility::default(),
+        MeshMaterial3d(mesh_data.cube_material.clone()),
+        Mesh3d(mesh_assets.add(tilemap_mesh))
+    ));
+}
+
+fn load_tilemap() -> Result<Tilemap, Whatever> {
+    let file = std::fs::File::open("assets/tilemap/tilemap.json");
+    let file = match file {
+        Ok(file) => file,
+        Err(err) => {
+            if err.kind() == std::io::ErrorKind::NotFound {
+                println!("tilemap not found. creating new tilemap");
+                return Ok(Tilemap::default());
+            }
+            return whatever!(Err(err), "");
+        }
+    };
+
+    let tilemap_saved = serde_json::from_reader::<_, TilemapSaved>(file).whatever_context("")?;
+    let tilemap_data = TilemapData::try_from(tilemap_saved).with_whatever_context(|err| format!("deserialized saved: {err}"))?;
+    let tilemap_collision = TilemapCollision::from(&tilemap_data);
+
+    Ok(Tilemap {
+        data: tilemap_data,
+        collision: tilemap_collision,
+    })
+}
+
+fn setup_system(
+    mut commands: Commands,
     // asset_server: Res<AssetServer>,
 ) {
-
     commands.spawn((
         // You need to spawn an entity with this component
         InfiniteGrid,
@@ -64,14 +103,6 @@ fn setup_system(
         DirectionalLight { ..default() },
         Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.).looking_at(Vec3::ZERO, Vec3::Y),
     ));
-
-    commands.spawn((
-        Tilemap::default(),
-        Transform::default(),
-        Visibility::default(),
-        MeshMaterial3d(mesh_data.cube_material.clone()),
-    ));
-
 }
 
 fn get_world_point(
@@ -150,6 +181,7 @@ fn move_system(
         let delta = accumulated_mouse_scroll.delta;
         let forward = camera_transform.forward();
         camera_transform.translation += forward * delta.y * scroll_speed;
+        camera_transform.translation.y = camera_transform.translation.y.max(5.0);
     }
 
 
@@ -248,16 +280,40 @@ fn place_system(
     if let Some(cursor_position) = window.cursor_position() {
         let ray = camera.viewport_to_world(transform, cursor_position).unwrap();
 
-        let pos = ray.plane_intersection_point(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y }).unwrap().floor().as_ivec3().with_y(0);
+        let ray_hit = {
+            if let Some(hit) = tilemap.ray_intersection(ray) {
+                hit
+            } else {
+                let time_of_impact = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y }).unwrap();
+                let tile = ray.get_point(time_of_impact).floor().as_ivec3().with_y(0);
+                TilemapRayHit {
+                    time_of_impact,
+                    hit_normal: Vec3::Y,
+                    tile,
+                }
+            }
+        };
 
-        gizmos.cube(Transform::from_translation(pos.as_vec3() + Vec3::ONE * 0.5), Color::WHITE);
+        gizmos.circle(Isometry3d::new(ray.get_point(ray_hit.time_of_impact), Transform::default().looking_to(ray_hit.hit_normal, Vec3::Y).rotation), 0.125, Color::WHITE);
+
+
+        gizmos.cube(Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)), Color::WHITE);
 
         if mouse_input.pressed(MouseButton::Left) {
-            tilemap.add_cube(tilemap_entity, pos, &mut commands, &mut mesh_assets);
+            tilemap.add_cube(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
+        } else if mouse_input.pressed(MouseButton::Right) {
+            tilemap.remove_at(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
         }
     }
 
     if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyE) {
-        tilemap.export();
+        tilemap.data.export();
+    }
+    if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyS) {
+        let result = tilemap.data.save();
+        if let Err(err) = result {
+            eprintln!("{err}");
+            eprintln!("{}", err.backtrace());
+        }
     }
 }

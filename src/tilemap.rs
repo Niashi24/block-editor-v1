@@ -1,17 +1,159 @@
-use std::{collections::BTreeMap, fs, io::Write};
+use std::{collections::BTreeMap, f32, fs::{self, File}, io::{BufWriter, Write}};
 
-use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::MeshMaterial3d, platform::collections::HashMap, transform::components::Transform};
+use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Ray3d, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::MeshMaterial3d, platform::collections::HashMap, transform::components::{GlobalTransform, Transform}};
 
 use gltf_json::{self as gltf, Accessor, validation::{Checked, USize64}};
+use parry3d::{math::{Pose3, Rot3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::{Ray, RayCast}, shape::{Cuboid, Shape, ShapeType}};
+use serde::{Serialize, Deserialize};
+use snafu::{OptionExt, ResultExt, Whatever};
+use sscanf::sscanf;
 
 use crate::MeshData;
 
+pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
+    coord.as_vec3() + Vec3::splat(0.5)
+}
+
+pub fn tilemap_coord_to_pose(coord: IVec3) -> Pose3 {
+    Pose3::from_translation(Vec3P::from_array(tilemap_coord_to_center(coord).to_array()))
+}
+
+#[derive(Default, Component)]
+pub struct TilemapCollision {
+    bvh: Bvh,
+    tile_to_node: HashMap<IVec3, u32>,
+    node_to_shape: HashMap<u32, (Box<dyn Shape>, IVec3)>,
+    node_idx: u32,
+}
+
+impl<'a> From<&'a TilemapData> for TilemapCollision {
+    fn from(value: &'a TilemapData) -> Self {
+        let mut out = TilemapCollision::default();
+
+        for (pos, tile) in value.tiles.iter() {
+            match tile.tile_type {
+                TileType::Cube => {
+                    out.add_cube(*pos);
+                },
+            }
+        }
+
+        out
+    }
+}
+
+impl TilemapCollision {
+    pub fn add_cube(&mut self, pos: IVec3) {
+        self.remove_at(pos);
+        let transform = tilemap_coord_to_pose(pos);
+
+        let cube = Cuboid::new(Vector::splat(0.5));
+        let aabb = cube.aabb(&transform);
+
+        self.bvh.insert(aabb, self.node_idx);
+        self.tile_to_node.insert(pos, self.node_idx);
+        self.node_to_shape.insert(self.node_idx, (Box::new(cube), pos));
+        self.node_idx += 1;
+    }
+
+    pub fn remove_at(&mut self, pos: IVec3) {
+        let Some(node) = self.tile_to_node.get(&pos) else {
+            return;
+        };
+
+        self.bvh.remove(*node);
+        self.node_to_shape.remove(node);
+        self.tile_to_node.remove(&pos);
+    }
+
+    pub fn ray_intersection(&self, ray: Ray3d) -> Option<TilemapRayHit> {
+        let ray_parry = Ray {
+            origin: Vec3P::from_array(ray.origin.to_array()),
+            dir: Vec3P::from_array(ray.direction.to_array()),
+        };
+
+        let (node, _hit_time) = self.bvh.cast_ray(&ray_parry, f32::INFINITY, |node, best_hit| {
+            let (shape, pos) = &self.node_to_shape[&node];
+            let pose = tilemap_coord_to_pose(*pos);
+            shape.cast_ray(&pose, &ray_parry, best_hit, true)
+        })?;
+
+        let (shape, pos) = &self.node_to_shape[&node];
+        let pose = tilemap_coord_to_pose(*pos);
+        let hit = shape.cast_ray_and_get_normal(&pose, &ray_parry, f32::INFINITY, true).unwrap();
+
+        Some(TilemapRayHit {
+            time_of_impact: hit.time_of_impact,
+            hit_normal: Vec3::from_array(hit.normal.to_array()),
+            tile: *pos,
+        })
+    }
+}
+
 #[derive(Component, Default)]
 pub struct Tilemap {
-    pub tiles: HashMap<IVec3, TileData>,
+    pub data: TilemapData,
+    pub collision: TilemapCollision,
 }
 
 impl Tilemap {
+    pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
+        self.data.add_cube(tilemap_entity, pos, commands, mesh_assets);
+        self.collision.add_cube(pos);
+    }
+
+    pub fn remove_at(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
+        self.collision.remove_at(pos);
+        self.data.remove_at(tilemap_entity, pos, commands, mesh_assets);
+    }
+
+    pub fn ray_intersection(&self, ray: Ray3d) -> Option<TilemapRayHit> {
+        self.collision.ray_intersection(ray)
+    }
+}
+
+pub struct TilemapRayHit {
+    pub time_of_impact: f32,
+    pub hit_normal: Vec3,
+    pub tile: IVec3,
+}
+
+#[derive(Clone, Default)]
+pub struct TilemapData {
+    pub tiles: HashMap<IVec3, TileData>,
+}
+
+#[derive(Clone, Default, Serialize, Deserialize)]
+pub struct TilemapSaved {
+    pub tiles: HashMap<String, TileData>,
+}
+
+impl From<TilemapData> for TilemapSaved {
+    fn from(value: TilemapData) -> Self {
+        Self {
+            tiles: value.tiles.into_iter().map(|(pos, tile)| (pos.to_string(), tile)).collect()
+        }
+    }
+}
+
+impl TryFrom<TilemapSaved> for TilemapData {
+    type Error = Whatever;
+
+    fn try_from(value: TilemapSaved) -> Result<Self, Self::Error> {
+        let tiles = value.tiles.into_iter()
+            .map(|(pos_str, tile)| {
+            let (x, y, z) = sscanf!(pos_str, "[{i32}, {i32}, {i32}]").with_whatever_context(|| format!("parsing: {:?}", pos_str))?;
+                Ok((IVec3::new(x, y, z), tile))
+            })
+            .collect::<Result<_, _>>()?;
+
+        Ok(Self {
+            tiles
+        })
+    }
+}
+
+impl TilemapData {
     pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
         if self.tiles.contains_key(&pos) { return; }
 
@@ -19,10 +161,33 @@ impl Tilemap {
             tile_type: TileType::Cube,
         });
 
+        self.refresh_mesh(tilemap_entity, commands, mesh_assets);
+    }
+
+    pub fn remove_at(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
+        if self.tiles.remove(&pos).is_some() {
+            self.refresh_mesh(tilemap_entity, commands, mesh_assets);
+        }
+    }
+
+    pub fn refresh_mesh(&self, tilemap_entity: Entity, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
         let mesh = self.create_mesh();
         let mesh = mesh_assets.add(mesh);
 
         commands.entity(tilemap_entity).insert(Mesh3d(mesh));
+    }
+
+    pub fn save(&self) -> Result<(), Whatever> {
+        std::fs::create_dir_all("assets/tilemap").whatever_context("create dir")?;
+
+        let file = File::create("assets/tilemap/tilemap.json").whatever_context("create file")?;
+        let mut file = BufWriter::new(file);
+        let saveable = TilemapSaved::from(self.clone());
+        serde_json::ser::to_writer(&mut file, &saveable).with_whatever_context(|err| format!("write json: {err}"))?;
+
+        println!("Successfully saved.");
+
+        Ok(())
     }
 
     pub fn export(&self) {
@@ -268,7 +433,7 @@ impl Tilemap {
                     for dir in Dir::DIRS {
                         let new_pos = *pos + dir.as_ivec3();
                         if self.tiles.get(&new_pos).is_none_or(|tile| !tile.covers_dir(&dir.inv())) {
-                            let translation = pos.as_vec3() + Vec3::splat(0.5) + 0.5 * dir.as_dir3();
+                            let translation = tilemap_coord_to_center(*pos) + 0.5 * dir.as_dir3();
                             let plane = Plane3d {
                                 normal: dir.as_dir3(),
                                 half_size: Vec2::splat(0.5),
@@ -292,10 +457,6 @@ fn pad_to_4(buffer: &mut Vec<u8>) {
     while buffer.len() % 4 != 0 {
         buffer.push(0);
     }
-}
-
-pub struct TilemapMesh {
-    planes: Vec<Transform>,
 }
 
 #[derive(Copy, Clone)]
@@ -352,6 +513,7 @@ impl Dir {
     }
 }
 
+#[derive(Clone, Serialize, Deserialize)]
 pub struct TileData {
     pub tile_type: TileType,
 }
@@ -366,6 +528,7 @@ impl TileData {
     }
 }
 
+#[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum TileType {
     Cube,
 }
