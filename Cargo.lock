@@ -1869,6 +1869,8 @@ dependencies = [
  "bevy",
  "bytemuck",
  "gltf-json",
+ "serde",
+ "serde_json",
  "snafu",
  "wgpu-types",
 ]

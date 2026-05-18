@@ -39,7 +39,8 @@ fn main() {
 fn setup_system(
     mut commands: Commands,
     mesh_data: Res<MeshData>,
-    asset_server: Res<AssetServer>,
+    // mesh_assets: ResMut<Assets<Mesh>>,
+    // asset_server: Res<AssetServer>,
 ) {
 
     commands.spawn((
@@ -64,7 +65,12 @@ fn setup_system(
         Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.).looking_at(Vec3::ZERO, Vec3::Y),
     ));
 
-    commands.spawn((Tilemap::default(), Transform::default(), Visibility::default()));
+    commands.spawn((
+        Tilemap::default(),
+        Transform::default(),
+        Visibility::default(),
+        MeshMaterial3d(mesh_data.cube_material.clone()),
+    ));
 
 }
 
@@ -132,10 +138,10 @@ fn move_system(
     //     camera_transform.translation += 0.01 * (accumulated_mouse_motion.delta.y * forward - accumulated_mouse_motion.delta.x * right);
     // }
 
-    if key_input.pressed(KeyCode::KeyE) {
+    if key_input.pressed(KeyCode::Numpad4) {
         camera_transform.rotate_y(-rotate_speed * time.delta_secs());
     }
-    if key_input.pressed(KeyCode::KeyQ) {
+    if key_input.pressed(KeyCode::Numpad5) {
         camera_transform.rotate_y(rotate_speed * time.delta_secs());
     }
 
@@ -232,6 +238,7 @@ fn place_system(
     mouse_input: Res<ButtonInput<MouseButton>>,
     key_input: Res<ButtonInput<KeyCode>>,
     mesh_data: Res<MeshData>,
+    mut mesh_assets: ResMut<Assets<Mesh>>,
     mut gizmos: Gizmos,
     mut commands: Commands,
 ) {
@@ -246,11 +253,11 @@ fn place_system(
         gizmos.cube(Transform::from_translation(pos.as_vec3() + Vec3::ONE * 0.5), Color::WHITE);
 
         if mouse_input.pressed(MouseButton::Left) {
-            tilemap.add_cube(tilemap_entity, pos, &mut commands, &mesh_data);
+            tilemap.add_cube(tilemap_entity, pos, &mut commands, &mut mesh_assets);
         }
     }
 
-    if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyS) {
-        tilemap.save();
+    if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyE) {
+        tilemap.export();
     }
 }

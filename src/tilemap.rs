@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, fs, io::Write};
 
-use bevy::{asset::RenderAssetUsages, ecs::{component::Component, entity::Entity, system::Commands}, math::{Dir3, IVec3, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::MeshMaterial3d, platform::collections::HashMap, transform::components::Transform};
+use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::MeshMaterial3d, platform::collections::HashMap, transform::components::Transform};
 
 use gltf_json::{self as gltf, Accessor, validation::{Checked, USize64}};
 
@@ -12,22 +12,20 @@ pub struct Tilemap {
 }
 
 impl Tilemap {
-    pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_data: &MeshData) {
+    pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
         if self.tiles.contains_key(&pos) { return; }
 
-        let entity = commands.entity(tilemap_entity).with_child((
-            Mesh3d(mesh_data.cube_mesh.clone()),
-            MeshMaterial3d(mesh_data.cube_material.clone()),
-            Transform::from_translation(pos.as_vec3() + Vec3::ONE * 0.5),
-        )).id();
-
         self.tiles.insert(pos, TileData {
-            entity,
             tile_type: TileType::Cube,
         });
+
+        let mesh = self.create_mesh();
+        let mesh = mesh_assets.add(mesh);
+
+        commands.entity(tilemap_entity).insert(Mesh3d(mesh));
     }
 
-    pub fn save(&self) {
+    pub fn export(&self) {
 
         let mut root = gltf::Root::default();
 
@@ -252,6 +250,8 @@ impl Tilemap {
         let mut writer = fs::File::create("tilemap/buffer0.bin").unwrap();
         writer.write_all(&buf).unwrap();
 
+        println!("Successfully exported.");
+
     }
 
     pub fn create_mesh(&self) -> Mesh {
@@ -353,7 +353,6 @@ impl Dir {
 }
 
 pub struct TileData {
-    pub entity: Entity,
     pub tile_type: TileType,
 }
 
