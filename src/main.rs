@@ -76,6 +76,11 @@ fn load_tilemap() -> Result<Tilemap, Whatever> {
     })
 }
 
+#[derive(Component, Default)]
+struct SelectionState {
+    active_plane: Option<(Vec3, Dir3)>,
+}
+
 fn setup_system(
     mut commands: Commands,
     // asset_server: Res<AssetServer>,
@@ -90,6 +95,7 @@ fn setup_system(
     let camera_transform = Transform::from_xyz(-12.5, 5.0, 10.0).with_rotation(Quat::from_rotation_x(-45.0f32.to_radians()));
     commands.spawn((
         Camera3d::default(),
+        SelectionState::default(),
         // CameraMovement {
         //     translation: camera_transform.translation,
         //     rotation: camera_transform.rotation,
@@ -253,7 +259,7 @@ impl FromWorld for MeshData {
 
 fn place_system(
     tilemap: Single<(Entity, &mut Tilemap)>,
-    camera: Single<(&Camera, &GlobalTransform)>,
+    camera: Single<(&Camera, &GlobalTransform, &mut SelectionState)>,
     window: Single<&Window>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     key_input: Res<ButtonInput<KeyCode>>,
@@ -262,35 +268,68 @@ fn place_system(
     mut gizmos: Gizmos,
     mut commands: Commands,
 ) {
-    let (camera, transform) = camera.into_inner();
+    let (camera, transform, mut selection_state) = camera.into_inner();
     let (tilemap_entity, mut tilemap) = tilemap.into_inner();
 
     if let Some(cursor_position) = window.cursor_position() {
         let ray = camera.viewport_to_world(transform, cursor_position).unwrap();
 
-        let ray_hit = {
-            if let Some(hit) = tilemap.ray_intersection(ray) {
-                hit
-            } else {
-                let time_of_impact = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y }).unwrap();
-                let tile = ray.get_point(time_of_impact).floor().as_ivec3().with_y(0);
-                TilemapRayHit {
-                    time_of_impact,
-                    hit_normal: Vec3::Y,
-                    tile,
+        match selection_state.active_plane.as_ref() {
+            None => {
+                let ray_hit = {
+                    if let Some(hit) = tilemap.ray_intersection(ray) {
+                        hit
+                    } else {
+                        let time_of_impact = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y }).unwrap();
+                        let tile = (ray.get_point(time_of_impact) + Dir3::Y * 0.01).floor().as_ivec3();
+                        TilemapRayHit {
+                            time_of_impact,
+                            hit_normal: Vec3::Y,
+                            tile,
+                        }
+                    }
+                };
+
+                gizmos.circle(Isometry3d::new(ray.get_point(ray_hit.time_of_impact), Transform::default().looking_to(ray_hit.hit_normal, Vec3::Y).rotation), 0.125, Color::WHITE);
+
+
+                gizmos.cube(Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)), Color::WHITE);
+
+                if mouse_input.any_pressed([MouseButton::Left, MouseButton::Right]) {
+                    selection_state.active_plane = Some((ray.get_point(ray_hit.time_of_impact), Dir3::new(ray_hit.hit_normal).unwrap()));
                 }
-            }
-        };
+            },
+            Some(&(origin, normal)) => {
+                if !mouse_input.pressed(MouseButton::Left) && !mouse_input.pressed(MouseButton::Right) {
+                    selection_state.active_plane = None;
+                } else {
+                    let ray_hit = {
+                        let time_of_impact = ray.intersect_plane(origin, InfinitePlane3d { normal }).unwrap();
+                        let mut point = ray.get_point(time_of_impact) + normal * 0.01;
+                        if mouse_input.pressed(MouseButton::Right) {
+                            point -= *normal;
+                        }
 
-        gizmos.circle(Isometry3d::new(ray.get_point(ray_hit.time_of_impact), Transform::default().looking_to(ray_hit.hit_normal, Vec3::Y).rotation), 0.125, Color::WHITE);
+                        let tile = point.floor().as_ivec3();
+                        TilemapRayHit {
+                            time_of_impact,
+                            hit_normal: Vec3::Y,
+                            tile,
+                        }
+                    };
+
+                    gizmos.circle(Isometry3d::new(ray.get_point(ray_hit.time_of_impact), Transform::default().looking_to(ray_hit.hit_normal, Vec3::Y).rotation), 0.125, Color::WHITE);
 
 
-        gizmos.cube(Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)), Color::WHITE);
+                    gizmos.cube(Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)), Color::WHITE);
 
-        if mouse_input.pressed(MouseButton::Left) {
-            tilemap.add_cube(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
-        } else if mouse_input.pressed(MouseButton::Right) {
-            tilemap.remove_at(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
+                    if mouse_input.pressed(MouseButton::Left) {
+                        tilemap.add_cube(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
+                    } else {
+                        tilemap.remove_at(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
+                    }
+                }
+            },
         }
     }
 
