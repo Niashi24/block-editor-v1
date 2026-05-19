@@ -5,6 +5,7 @@
 //! and an evenly spaced grid to judge relative scale.
 
 mod tilemap;
+mod scene;
 
 
 use bevy::{
@@ -16,7 +17,7 @@ use bevy::{
 
 use snafu::{ResultExt, Whatever, whatever};
 
-use crate::tilemap::{Tilemap, TilemapCollision, TilemapData, TilemapRayHit, TilemapSaved, tilemap_coord_to_center};
+use crate::{scene::Scene, tilemap::{Tilemap, TilemapCollision, TilemapData, TilemapRayHit, tilemap_coord_to_center}};
 
 fn main() {
 
@@ -29,52 +30,75 @@ fn main() {
             //     ..Default::default()
             // },
         ))
-        .add_systems(Startup, (setup_system, spawn_tilemap))
-        .add_systems(Update, (move_system, place_system))
+        .add_systems(Startup, (setup_system))
+        .add_systems(Update, (move_system, place_system, load_tilemap))
         .init_resource::<MeshData>()
         .run();
 }
 
-fn spawn_tilemap(
-    mut commands: Commands,
-    mesh_data: Res<MeshData>,
+fn load_tilemap(
+    mut tilemap_entity: Single<(&mut Tilemap, &mut Mesh3d)>,
+    mut camera_entity: Single<&mut Transform, With<Camera>>,
     mut mesh_assets: ResMut<Assets<Mesh>>,
+    input: Res<ButtonInput<KeyCode>>,
 ) {
-    let tilemap = load_tilemap().unwrap();
+    if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyL) {
+        let scene = Scene::load().unwrap();
+        let collision = TilemapCollision::from(&scene.tilemap_data);
+        let tilemap = Tilemap { data: scene.tilemap_data, collision };
 
-    let tilemap_mesh = tilemap.data.create_mesh();
+        let tilemap_mesh = tilemap.data.create_mesh();
 
-    commands.spawn((
-        tilemap,
-        Transform::default(),
-        Visibility::default(),
-        MeshMaterial3d(mesh_data.cube_material.clone()),
-        Mesh3d(mesh_assets.add(tilemap_mesh))
-    ));
-}
+        *tilemap_entity.0 = tilemap;
+        *tilemap_entity.1 = Mesh3d(mesh_assets.add(tilemap_mesh));
 
-fn load_tilemap() -> Result<Tilemap, Whatever> {
-    let file = std::fs::File::open("assets/tilemap/tilemap.json");
-    let file = match file {
-        Ok(file) => file,
-        Err(err) => {
-            if err.kind() == std::io::ErrorKind::NotFound {
-                println!("tilemap not found. creating new tilemap");
-                return Ok(Tilemap::default());
-            }
-            return whatever!(Err(err), "");
+        **camera_entity = Transform::from_isometry(scene.camera);
+
+        // commands.spawn((
+        //     tilemap,
+        //     Transform::default(),
+        //     Visibility::default(),
+        //     MeshMaterial3d(mesh_data.cube_material.clone()),
+        //     Mesh3d(mesh_assets.add(tilemap_mesh))
+        // ));
+    }
+    if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyS) {
+        let tilemap_data = tilemap_entity.0.data.clone();
+        let camera = camera_entity.to_isometry();
+        let scene = Scene {
+            tilemap_data,
+            camera,
+        };
+        let result = scene.save();
+        if let Err(err) = result {
+            eprintln!("{err}");
+            eprintln!("{}", err.backtrace());
         }
-    };
-
-    let tilemap_saved = serde_json::from_reader::<_, TilemapSaved>(file).whatever_context("")?;
-    let tilemap_data = TilemapData::try_from(tilemap_saved).with_whatever_context(|err| format!("deserialized saved: {err}"))?;
-    let tilemap_collision = TilemapCollision::from(&tilemap_data);
-
-    Ok(Tilemap {
-        data: tilemap_data,
-        collision: tilemap_collision,
-    })
+    }
 }
+
+// fn load_scene() -> Result<Scene, Whatever> {
+//     let file = std::fs::File::open("assets/tilemap/tilemap.json");
+//     let file = match file {
+//         Ok(file) => file,
+//         Err(err) => {
+//             if err.kind() == std::io::ErrorKind::NotFound {
+//                 println!("tilemap not found. creating new tilemap");
+//                 return Ok(Tilemap::default());
+//             }
+//             return whatever!(Err(err), "");
+//         }
+//     };
+
+//     let tilemap_saved = serde_json::from_reader::<_, TilemapSaved>(file).whatever_context("")?;
+//     let tilemap_data = TilemapData::try_from(tilemap_saved).with_whatever_context(|err| format!("deserialized saved: {err}"))?;
+//     let tilemap_collision = TilemapCollision::from(&tilemap_data);
+
+//     Ok(Tilemap {
+//         data: tilemap_data,
+//         collision: tilemap_collision,
+//     })
+// }
 
 #[derive(Component, Default)]
 struct SelectionState {
@@ -83,6 +107,7 @@ struct SelectionState {
 
 fn setup_system(
     mut commands: Commands,
+    mesh_data: Res<MeshData>,
     // asset_server: Res<AssetServer>,
 ) {
     commands.spawn((
@@ -90,6 +115,11 @@ fn setup_system(
         InfiniteGrid,
         // Optional component you can use to configure the grid
         InfiniteGridSettings::default(),
+    ));
+
+    commands.spawn((
+        Tilemap::default(),
+        MeshMaterial3d(mesh_data.cube_material.clone())
     ));
 
     let camera_transform = Transform::from_xyz(-12.5, 5.0, 10.0).with_rotation(Quat::from_rotation_x(-45.0f32.to_radians()));
@@ -105,7 +135,7 @@ fn setup_system(
 
     commands.spawn((
         DirectionalLight { ..default() },
-        Transform::from_translation(Vec3::X * 15. + Vec3::Y * 20.).looking_at(Vec3::ZERO, Vec3::Y),
+        Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, 0.0, -45.0f32.to_radians(), -15.0f32.to_radians())),
     ));
 }
 
@@ -244,9 +274,9 @@ pub struct MeshData {
 impl FromWorld for MeshData {
     fn from_world(world: &mut World) -> Self {
         let cube_mesh = world.resource_mut::<Assets<Mesh>>().add(Cuboid::new(1.0, 1.0, 1.0));
-        let mut material = StandardMaterial::from_color(Color::srgb_u8(
-            153, 155, 156,
-        ));
+        let asset_server = world.resource_mut::<AssetServer>();
+        let image = asset_server.load::<Image>("PrototypeTextures/texture_08.png");
+        let mut material = StandardMaterial::from(image);
         material.perceptual_roughness = 1.0;
         let cube_material = world.resource_mut::<Assets<StandardMaterial>>().add(material);
 
@@ -335,12 +365,5 @@ fn place_system(
 
     if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyE) {
         tilemap.data.export();
-    }
-    if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyS) {
-        let result = tilemap.data.save();
-        if let Err(err) = result {
-            eprintln!("{err}");
-            eprintln!("{}", err.backtrace());
-        }
     }
 }

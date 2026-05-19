@@ -1,10 +1,11 @@
 use std::{collections::BTreeMap, f32, fs::{self, File}, io::{BufWriter, Write}};
 
-use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Ray3d, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, platform::collections::HashMap};
+use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Ray3d, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, platform::collections::HashMap, transform::components::Transform};
 
 use gltf_json::{self as gltf, validation::{Checked, USize64}};
 use parry3d::{math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, Shape}};
 use serde::{Serialize, Deserialize};
+use serde_repr::{Deserialize_repr, Serialize_repr};
 use snafu::{OptionExt, ResultExt, Whatever};
 use sscanf::sscanf;
 
@@ -90,6 +91,7 @@ impl TilemapCollision {
 }
 
 #[derive(Component, Default)]
+#[require(Transform, Mesh3d)]
 pub struct Tilemap {
     pub data: TilemapData,
     pub collision: TilemapCollision,
@@ -122,35 +124,6 @@ pub struct TilemapData {
     pub tiles: HashMap<IVec3, TileData>,
 }
 
-#[derive(Clone, Default, Serialize, Deserialize)]
-pub struct TilemapSaved {
-    pub tiles: HashMap<String, TileData>,
-}
-
-impl From<TilemapData> for TilemapSaved {
-    fn from(value: TilemapData) -> Self {
-        Self {
-            tiles: value.tiles.into_iter().map(|(pos, tile)| (pos.to_string(), tile)).collect()
-        }
-    }
-}
-
-impl TryFrom<TilemapSaved> for TilemapData {
-    type Error = Whatever;
-
-    fn try_from(value: TilemapSaved) -> Result<Self, Self::Error> {
-        let tiles = value.tiles.into_iter()
-            .map(|(pos_str, tile)| {
-            let (x, y, z) = sscanf!(pos_str, "[{i32}, {i32}, {i32}]").with_whatever_context(|| format!("parsing: {:?}", pos_str))?;
-                Ok((IVec3::new(x, y, z), tile))
-            })
-            .collect::<Result<_, _>>()?;
-
-        Ok(Self {
-            tiles
-        })
-    }
-}
 
 impl TilemapData {
     pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
@@ -174,19 +147,6 @@ impl TilemapData {
         let mesh = mesh_assets.add(mesh);
 
         commands.entity(tilemap_entity).insert(Mesh3d(mesh));
-    }
-
-    pub fn save(&self) -> Result<(), Whatever> {
-        std::fs::create_dir_all("assets/tilemap").whatever_context("create dir")?;
-
-        let file = File::create("assets/tilemap/tilemap.json").whatever_context("create file")?;
-        let mut file = BufWriter::new(file);
-        let saveable = TilemapSaved::from(self.clone());
-        serde_json::ser::to_writer(&mut file, &saveable).with_whatever_context(|err| format!("write json: {err}"))?;
-
-        println!("Successfully saved.");
-
-        Ok(())
     }
 
     pub fn export(&self) {
