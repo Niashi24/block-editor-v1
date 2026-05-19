@@ -9,7 +9,6 @@ mod scene;
 
 
 use bevy::{
-    // camera_controller::,
     dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, prelude::*, window::CursorOptions
 };
 
@@ -24,7 +23,6 @@ fn main() {
         .add_plugins((
             DefaultPlugins,
             InfiniteGridPlugin,
-            // DebugPi
             // FpsOverlayPlugin {
             //     ..Default::default()
             // },
@@ -52,14 +50,6 @@ fn load_tilemap(
         *tilemap_entity.1 = Mesh3d(mesh_assets.add(tilemap_mesh));
 
         **camera_entity = Transform::from_isometry(scene.camera);
-
-        // commands.spawn((
-        //     tilemap,
-        //     Transform::default(),
-        //     Visibility::default(),
-        //     MeshMaterial3d(mesh_data.cube_material.clone()),
-        //     Mesh3d(mesh_assets.add(tilemap_mesh))
-        // ));
     }
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyS) {
         let tilemap_data = tilemap_entity.0.data.clone();
@@ -75,29 +65,6 @@ fn load_tilemap(
         }
     }
 }
-
-// fn load_scene() -> Result<Scene, Whatever> {
-//     let file = std::fs::File::open("assets/tilemap/tilemap.json");
-//     let file = match file {
-//         Ok(file) => file,
-//         Err(err) => {
-//             if err.kind() == std::io::ErrorKind::NotFound {
-//                 println!("tilemap not found. creating new tilemap");
-//                 return Ok(Tilemap::default());
-//             }
-//             return whatever!(Err(err), "");
-//         }
-//     };
-
-//     let tilemap_saved = serde_json::from_reader::<_, TilemapSaved>(file).whatever_context("")?;
-//     let tilemap_data = TilemapData::try_from(tilemap_saved).with_whatever_context(|err| format!("deserialized saved: {err}"))?;
-//     let tilemap_collision = TilemapCollision::from(&tilemap_data);
-
-//     Ok(Tilemap {
-//         data: tilemap_data,
-//         collision: tilemap_collision,
-//     })
-// }
 
 #[derive(Component, Default)]
 struct SelectionState {
