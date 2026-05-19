@@ -15,9 +15,8 @@ use bevy::{
 
 
 
-use snafu::{ResultExt, Whatever, whatever};
 
-use crate::{scene::Scene, tilemap::{Tilemap, TilemapCollision, TilemapData, TilemapRayHit, tilemap_coord_to_center}};
+use crate::{scene::Scene, tilemap::{Tilemap, TilemapCollision, TilemapRayHit, tilemap_coord_to_center}};
 
 fn main() {
 
@@ -30,7 +29,7 @@ fn main() {
             //     ..Default::default()
             // },
         ))
-        .add_systems(Startup, (setup_system))
+        .add_systems(Startup, setup_system)
         .add_systems(Update, (move_system, place_system, load_tilemap))
         .init_resource::<MeshData>()
         .run();
