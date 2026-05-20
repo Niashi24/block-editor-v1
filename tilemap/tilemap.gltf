@@ -3,38 +3,38 @@
     {
       "bufferView": 0,
       "byteOffset": 0,
-      "count": 1488,
+      "count": 1216,
       "componentType": 5126,
       "type": "VEC3",
       "min": [
-        -11.0,
+        -21.0,
         -1.0,
-        0.0
+        2.0
       ],
       "max": [
-        2.0,
+        -9.0,
         6.0,
-        9.0
+        10.0
       ]
     },
     {
       "bufferView": 0,
       "byteOffset": 12,
-      "count": 1488,
+      "count": 1216,
       "componentType": 5126,
       "type": "VEC3"
     },
     {
       "bufferView": 0,
       "byteOffset": 24,
-      "count": 1488,
+      "count": 1216,
       "componentType": 5126,
       "type": "VEC2"
     },
     {
       "bufferView": 1,
       "byteOffset": 0,
-      "count": 2232,
+      "count": 1824,
       "componentType": 5125,
       "type": "SCALAR"
     }
@@ -44,23 +44,53 @@
   },
   "buffers": [
     {
-      "byteLength": 56544,
+      "byteLength": 46208,
       "uri": "buffer0.bin"
     }
   ],
   "bufferViews": [
     {
       "buffer": 0,
-      "byteLength": 47616,
+      "byteLength": 38912,
       "byteOffset": 0,
       "byteStride": 32,
       "target": 34962
     },
     {
       "buffer": 0,
-      "byteLength": 8928,
-      "byteOffset": 47616,
+      "byteLength": 7296,
+      "byteOffset": 38912,
       "target": 34963
+    }
+  ],
+  "images": [
+    {
+      "uri": "../assets/atlas.png"
+    }
+  ],
+  "materials": [
+    {
+      "alphaMode": "BLEND",
+      "doubleSided": false,
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorTexture": {
+          "index": 0,
+          "texCoord": 1
+        },
+        "metallicFactor": 1.0,
+        "roughnessFactor": 1.0
+      },
+      "emissiveFactor": [
+        0.0,
+        0.0,
+        0.0
+      ]
     }
   ],
   "meshes": [
@@ -72,7 +102,8 @@
             "NORMAL": 1,
             "TEXCOORD_0": 2
           },
-          "indices": 3
+          "indices": 3,
+          "material": 0
         }
       ]
     }
@@ -82,11 +113,24 @@
       "mesh": 0
     }
   ],
+  "samplers": [
+    {
+      "magFilter": 9728,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
   "scenes": [
     {
       "nodes": [
         0
       ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
     }
   ]
 }

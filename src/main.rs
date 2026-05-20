@@ -51,7 +51,9 @@ fn load_tilemap(
             tile_height: 11,
         });
         let collision = TilemapCollision::from(&scene.tilemap_data);
+        let mesh = scene.tilemap_data.create_mesh();
         let tilemap = Tilemap { data: scene.tilemap_data, collision };
+
 
         let img = match &tilemap.data.image {
             Some(img) => asset_server.load::<Image>(&img.path),
@@ -59,8 +61,9 @@ fn load_tilemap(
         };
 
         let mat = asset_server.add(StandardMaterial::from(img));
+        let mesh = mesh_assets.add(mesh);
 
-        commands.entity(tilemap_entity.0).insert((tilemap, MeshMaterial3d(mat)));
+        commands.entity(tilemap_entity.0).insert((tilemap, MeshMaterial3d(mat), Mesh3d(mesh)));
 
         **camera_entity = Transform::from_isometry(scene.camera);
     }

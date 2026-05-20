@@ -2,7 +2,7 @@ use std::{collections::BTreeMap, f32, fs::{self}, io::Write};
 
 use bevy::{asset::{AssetServer, Assets, RenderAssetUsages}, ecs::{change_detection::DetectChanges, component::Component, entity::Entity, lifecycle::HookContext, system::{Commands, EntityCommand, Query, ResMut}, world::{DeferredWorld, EntityWorldMut, Mut}}, image::Image, math::{Dir3, FloatExt, IVec3, Quat, Ray3d, Vec2, Vec3, bounding::Aabb2d, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::{MeshMaterial3d, StandardMaterial}, platform::collections::HashMap, transform::components::Transform};
 
-use gltf_json::{self as gltf, validation::{Checked, USize64}};
+use gltf_json::{self as gltf, material::{EmissiveFactor, PbrMetallicRoughness}, texture::Info, validation::{Checked, USize64}};
 use parry3d::{math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, Shape}};
 use serde::{Serialize, Deserialize};
 use wgpu_types::PrimitiveTopology;
@@ -175,6 +175,59 @@ impl TilemapData {
     pub fn export(&self) {
 
         let mut root = gltf::Root::default();
+
+        let image_path = self.image.as_ref().map(|img| img.path.clone())
+            .unwrap_or_else(|| "PrototypeTextures.png".to_string());
+        let image_path = format!("../assets/{}", image_path);
+
+        let image = root.push(gltf::Image {
+            buffer_view: None,
+            mime_type: None,
+            name: None,
+            uri: Some(image_path),
+            extensions: Default::default(),
+            extras: Default::default(),
+        });
+
+        let sampler = root.push(gltf::texture::Sampler {
+            mag_filter: Some(Checked::Valid(gltf_json::texture::MagFilter::Nearest)),
+            min_filter: None,
+            name: None,
+            wrap_s: Checked::Valid(gltf_json::texture::WrappingMode::Repeat),
+            wrap_t: Checked::Valid(gltf_json::texture::WrappingMode::Repeat),
+            extensions: Default::default(),
+            extras: Default::default(),
+        });
+
+        let texture = root.push(gltf::Texture {
+            name: None,
+            sampler: Some(sampler),
+            source: image,
+            extensions: Default::default(),
+            extras: Default::default(),
+        });
+
+        let material = root.push(gltf::Material {
+            alpha_cutoff: None,
+            alpha_mode: Checked::Valid(gltf::material::AlphaMode::Blend),
+            double_sided: false,
+            name: None,
+            pbr_metallic_roughness: PbrMetallicRoughness {
+                base_color_texture: Some(Info {
+                    index: texture,
+                    tex_coord: 1,
+                    extensions: Default::default(),
+                    extras: Default::default(),
+                }),
+                ..Default::default()
+            },
+            normal_texture: None,
+            occlusion_texture: None,
+            emissive_texture: None,
+            emissive_factor: EmissiveFactor::default(),
+            extensions: Default::default(),
+            extras: Default::default(),
+        });
 
         let meshes = [
             self.create_mesh()
@@ -362,7 +415,7 @@ impl TilemapData {
                 extensions: Default::default(),
                 extras: Default::default(),
                 indices: Some(indices),
-                material: None,
+                material: Some(material),
                 mode: Checked::Valid(gltf::mesh::Mode::Triangles),
                 targets: None,
             };
