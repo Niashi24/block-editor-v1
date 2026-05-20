@@ -1,10 +1,11 @@
 use std::{collections::BTreeMap, f32, fs::{self}, io::Write};
 
-use bevy::{asset::{Assets, RenderAssetUsages}, ecs::{component::Component, entity::Entity, system::{Commands, ResMut}}, math::{Dir3, IVec3, Ray3d, Vec2, Vec3, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, platform::collections::HashMap, transform::components::Transform};
+use bevy::{asset::{AssetServer, Assets, RenderAssetUsages}, ecs::{change_detection::DetectChanges, component::Component, entity::Entity, lifecycle::HookContext, system::{Commands, EntityCommand, Query, ResMut}, world::{DeferredWorld, EntityWorldMut, Mut}}, image::Image, math::{Dir3, FloatExt, IVec3, Quat, Ray3d, Vec2, Vec3, bounding::Aabb2d, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::{MeshMaterial3d, StandardMaterial}, platform::collections::HashMap, transform::components::Transform};
 
 use gltf_json::{self as gltf, validation::{Checked, USize64}};
 use parry3d::{math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, Shape}};
 use serde::{Serialize, Deserialize};
+use wgpu_types::PrimitiveTopology;
 
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
@@ -29,7 +30,7 @@ impl<'a> From<&'a TilemapData> for TilemapCollision {
 
         for (pos, tile) in value.tiles.iter() {
             match tile.tile_type {
-                TileType::Cube => {
+                TileType::Cube(_) => {
                     out.add_cube(*pos);
                 },
             }
@@ -95,18 +96,49 @@ pub struct Tilemap {
 }
 
 impl Tilemap {
-    pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
-        self.data.add_cube(tilemap_entity, pos, commands, mesh_assets);
-        self.collision.add_cube(pos);
-    }
+    // pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
+    //     self.data.add_cube(tilemap_entity, pos, commands, mesh_assets);
+    //     self.collision.add_cube(pos);
+    // }
 
-    pub fn remove_at(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
-        self.collision.remove_at(pos);
-        self.data.remove_at(tilemap_entity, pos, commands, mesh_assets);
-    }
+    // pub fn remove_at(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
+    //     self.collision.remove_at(pos);
+    //     self.data.remove_at(tilemap_entity, pos, commands, mesh_assets);
+    // }
 
     pub fn ray_intersection(&self, ray: Ray3d) -> Option<TilemapRayHit> {
         self.collision.ray_intersection(ray)
+    }
+
+    pub fn add_cube(pos: IVec3) -> impl EntityCommand {
+        move |mut world: EntityWorldMut| {
+            let mut tilemap = world.get_mut::<Tilemap>().unwrap();
+            if tilemap.data.get(pos).is_some() { return; }
+
+            tilemap.data.add_cube(pos);
+            tilemap.collision.add_cube(pos);
+            Self::regenerate_mesh(world);
+        }
+    }
+
+    pub fn remove_at(pos: IVec3) -> impl EntityCommand {
+        move |mut world: EntityWorldMut| {
+            let mut tilemap = world.get_mut::<Tilemap>().unwrap();
+            if tilemap.data.get(pos).is_none() { return; }
+            tilemap.data.remove_at(pos);
+            tilemap.collision.remove_at(pos);
+            Self::regenerate_mesh(world);
+        }
+    }
+
+    fn regenerate_mesh(mut world: EntityWorldMut) {
+        let tilemap = world.get::<Tilemap>().unwrap();
+        let mesh = tilemap.data.create_mesh();
+        let mesh = world.resource_scope::<Assets<Mesh>, _>(|_, mut mesh_assets| mesh_assets.add(mesh));
+
+        world.insert((
+            Mesh3d(mesh),
+        ));
     }
 }
 
@@ -119,31 +151,25 @@ pub struct TilemapRayHit {
 #[derive(Clone, Default)]
 pub struct TilemapData {
     pub tiles: HashMap<IVec3, TileData>,
+    pub image: Option<TilemapImage>,
 }
 
 
 impl TilemapData {
-    pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
+    pub fn add_cube(&mut self, pos: IVec3) {
         if self.tiles.contains_key(&pos) { return; }
 
         self.tiles.insert(pos, TileData {
-            tile_type: TileType::Cube,
+            tile_type: TileType::default_cube(),
         });
-
-        self.refresh_mesh(tilemap_entity, commands, mesh_assets);
     }
 
-    pub fn remove_at(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
-        if self.tiles.remove(&pos).is_some() {
-            self.refresh_mesh(tilemap_entity, commands, mesh_assets);
-        }
+    pub fn get(&self, pos: IVec3) -> Option<&TileData> {
+        self.tiles.get(&pos)
     }
 
-    pub fn refresh_mesh(&self, tilemap_entity: Entity, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
-        let mesh = self.create_mesh();
-        let mesh = mesh_assets.add(mesh);
-
-        commands.entity(tilemap_entity).insert(Mesh3d(mesh));
+    pub fn remove_at(&mut self, pos: IVec3) {
+        self.tiles.remove(&pos);
     }
 
     pub fn export(&self) {
@@ -384,9 +410,9 @@ impl TilemapData {
 
         for (pos, tile) in self.tiles.iter() {
             match tile.tile_type {
-                TileType::Cube => {
+                TileType::Cube(face_data) => {
 
-                    for dir in Dir::DIRS {
+                    for (i, dir) in Dir::DIRS.into_iter().enumerate() {
                         let new_pos = *pos + dir.as_ivec3();
                         if self.tiles.get(&new_pos).is_none_or(|tile| !tile.covers_dir(&dir.inv())) {
                             let translation = tilemap_coord_to_center(*pos) + 0.5 * dir.as_dir3();
@@ -395,8 +421,15 @@ impl TilemapData {
                                 half_size: Vec2::splat(0.5),
                             };
 
-                            let mut plane_mesh = plane.mesh().build();
-                            plane_mesh = plane_mesh.translated_by(translation);
+                            let face = face_data[i];
+                            let uv = face.and_then(|face| self.image.as_ref().map(|img| img.uv(face.tile_idx)))
+                                .unwrap_or([[0.0; 2], [1.0; 2]]);
+                            // let uv = [[0.0; 2], [1.0; 2]];
+
+                            let plane_mesh = construct_plane_mesh(translation, dir.as_dir3(), uv);
+
+                            // let mut plane_mesh = plane.mesh().build();
+                            // plane_mesh = plane_mesh.translated_by(translation);
                             mesh.merge(&plane_mesh).unwrap();
                             // meshes.push(plane_mesh);
                         }
@@ -406,6 +439,73 @@ impl TilemapData {
         }
 
         mesh
+    }
+}
+
+fn construct_plane_mesh(translation: Vec3, normal: Dir3, uv: [[f32; 2]; 2]) -> Mesh {
+    let mut positions: Vec<Vec3> = Vec::with_capacity(4);
+    let mut normals: Vec<[f32; 3]> = Vec::with_capacity(4);
+    // let mut uvs: Vec<[f32; 2]> = Vec::with_capacity(4);
+
+    let rotation = Quat::from_rotation_arc(Vec3::Y, *normal);
+
+    for z in 0..2 {
+        for x in 0..2 {
+            let tx = x as f32;
+            let tz = z as f32;
+            let pos = rotation * Vec3::new(-0.5 + tx, 0.0, -0.5 + tz) + translation;
+            positions.push(pos);
+            normals.push(normal.to_array());
+            // let uv_x = FloatExt::lerp(tx, uv[0][0], uv[1][0]);
+            // let uv_z = FloatExt::lerp(tz, uv[0][1], uv[1][1]);
+            // uvs.push([uv_x, uv_z]);
+        }
+    }
+
+    let [min_uv, max_uv] = uv;
+    let uvs = vec![
+        min_uv,
+        [max_uv[0], min_uv[1]],
+        [min_uv[0], max_uv[1]],
+        max_uv,
+    ];
+    let indices = vec![3, 1, 2, 0, 2, 1];
+
+    Mesh::new(
+        PrimitiveTopology::TriangleList,
+        RenderAssetUsages::default(),
+    )
+    .with_inserted_indices(Indices::U32(indices))
+    .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, positions)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, normals)
+    .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, uvs)
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TilemapImage {
+    pub path: String,
+    pub image_width: u32,
+    pub image_height: u32,
+    pub tile_width: u32,
+    pub tile_height: u32,
+}
+
+impl TilemapImage {
+    pub fn uv(&self, i: u32) -> [[f32; 2]; 2] {
+        let tiles_wide = self.tiles_wide();
+        let (tl_x, tl_y) = (i % tiles_wide, i / tiles_wide);
+        let (tl_x, tl_y) = (tl_x * self.tile_width, tl_y * self.tile_height);
+        let (br_x, br_y) = (tl_x + self.tile_width, tl_y + self.tile_height);
+
+        [[tl_x, tl_y], [br_x, br_y]]
+            .map(|f| [
+                f[0] as f32 / self.image_width as f32,
+                f[1] as f32 / self.image_height as f32,
+            ])
+    }
+
+    fn tiles_wide(&self) -> u32 {
+        self.image_width / self.tile_width
     }
 }
 
@@ -477,7 +577,7 @@ pub struct TileData {
 impl TileData {
     pub fn covers_dir(&self, _dir: &Dir) -> bool {
         match self.tile_type {
-            TileType::Cube => {
+            TileType::Cube(_) => {
                 true
             },
         }
@@ -486,5 +586,16 @@ impl TileData {
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub enum TileType {
-    Cube,
+    Cube([Option<FaceData>; 6]),
+}
+
+impl TileType {
+    pub fn default_cube() -> Self {
+        Self::Cube([Some(FaceData { tile_idx: 0 }); 6])
+    }
+}
+
+#[derive(Clone, Copy, Serialize, Deserialize)]
+pub struct FaceData {
+    tile_idx: u32,
 }

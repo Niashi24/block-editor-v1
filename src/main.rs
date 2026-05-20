@@ -15,13 +15,13 @@ use bevy::{
 
 
 
-use crate::{scene::Scene, tilemap::{Tilemap, TilemapCollision, TilemapRayHit, tilemap_coord_to_center}};
+use crate::{scene::Scene, tilemap::{Tilemap, TilemapCollision, TilemapImage, TilemapRayHit, tilemap_coord_to_center}};
 
 fn main() {
 
     App::new()
         .add_plugins((
-            DefaultPlugins,
+            DefaultPlugins.set(ImagePlugin::default_nearest()),
             InfiniteGridPlugin,
             // FpsOverlayPlugin {
             //     ..Default::default()
@@ -34,25 +34,38 @@ fn main() {
 }
 
 fn load_tilemap(
-    mut tilemap_entity: Single<(&mut Tilemap, &mut Mesh3d)>,
+    tilemap_entity: Single<(Entity, &Tilemap)>,
     mut camera_entity: Single<&mut Transform, With<Camera>>,
     mut mesh_assets: ResMut<Assets<Mesh>>,
+    asset_server: Res<AssetServer>,
     input: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
 ) {
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyL) {
-        let scene = Scene::load().unwrap();
+        let mut scene = Scene::load().unwrap();
+        scene.tilemap_data.image = Some(TilemapImage {
+            path: String::from("atlas.png"),
+            image_width: 160,
+            image_height: 110,
+            tile_width: 16,
+            tile_height: 11,
+        });
         let collision = TilemapCollision::from(&scene.tilemap_data);
         let tilemap = Tilemap { data: scene.tilemap_data, collision };
 
-        let tilemap_mesh = tilemap.data.create_mesh();
+        let img = match &tilemap.data.image {
+            Some(img) => asset_server.load::<Image>(&img.path),
+            None => asset_server.load("PrototypeTextures/texture_08.png"),
+        };
 
-        *tilemap_entity.0 = tilemap;
-        *tilemap_entity.1 = Mesh3d(mesh_assets.add(tilemap_mesh));
+        let mat = asset_server.add(StandardMaterial::from(img));
+
+        commands.entity(tilemap_entity.0).insert((tilemap, MeshMaterial3d(mat)));
 
         **camera_entity = Transform::from_isometry(scene.camera);
     }
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyS) {
-        let tilemap_data = tilemap_entity.0.data.clone();
+        let tilemap_data = tilemap_entity.1.data.clone();
         let camera = camera_entity.to_isometry();
         let scene = Scene {
             tilemap_data,
@@ -241,8 +254,9 @@ impl FromWorld for MeshData {
     fn from_world(world: &mut World) -> Self {
         let cube_mesh = world.resource_mut::<Assets<Mesh>>().add(Cuboid::new(1.0, 1.0, 1.0));
         let asset_server = world.resource_mut::<AssetServer>();
-        let image = asset_server.load::<Image>("PrototypeTextures/texture_08.png");
+        let image = asset_server.load::<Image>("atlas.png");
         let mut material = StandardMaterial::from(image);
+
         material.perceptual_roughness = 1.0;
         let cube_material = world.resource_mut::<Assets<StandardMaterial>>().add(material);
 
@@ -254,7 +268,7 @@ impl FromWorld for MeshData {
 }
 
 fn place_system(
-    tilemap: Single<(Entity, &mut Tilemap)>,
+    tilemap: Single<(Entity, &Tilemap)>,
     camera: Single<(&Camera, &GlobalTransform, &mut SelectionState)>,
     window: Single<&Window>,
     mouse_input: Res<ButtonInput<MouseButton>>,
@@ -265,7 +279,7 @@ fn place_system(
     mut commands: Commands,
 ) {
     let (camera, transform, mut selection_state) = camera.into_inner();
-    let (tilemap_entity, mut tilemap) = tilemap.into_inner();
+    let (tilemap_entity, tilemap) = tilemap.into_inner();
 
     if let Some(cursor_position) = window.cursor_position() {
         let ray = camera.viewport_to_world(transform, cursor_position).unwrap();
@@ -320,9 +334,9 @@ fn place_system(
                     gizmos.cube(Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)), Color::WHITE);
 
                     if mouse_input.pressed(MouseButton::Left) {
-                        tilemap.add_cube(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
+                        commands.entity(tilemap_entity).queue(Tilemap::add_cube(ray_hit.tile));
                     } else {
-                        tilemap.remove_at(tilemap_entity, ray_hit.tile, &mut commands, &mut mesh_assets);
+                        commands.entity(tilemap_entity).queue(Tilemap::remove_at(ray_hit.tile));
                     }
                 }
             },

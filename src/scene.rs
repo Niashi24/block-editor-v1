@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Whatever, whatever};
 use sscanf::sscanf;
 
-use crate::tilemap::{TileData, TilemapData};
+use crate::tilemap::{TileData, TilemapData, TilemapImage};
 
 
 #[derive(Clone)]
@@ -87,12 +87,14 @@ impl TryFrom<SceneSaved> for Scene {
 #[derive(Clone, Default, Serialize, Deserialize)]
 struct TilemapSaved {
     pub tiles: HashMap<String, TileData>,
+    pub image: Option<TilemapImage>,
 }
 
 impl From<TilemapData> for TilemapSaved {
     fn from(value: TilemapData) -> Self {
         Self {
-            tiles: value.tiles.into_iter().map(|(pos, tile)| (pos.to_string(), tile)).collect()
+            tiles: value.tiles.into_iter().map(|(pos, tile)| (pos.to_string(), tile)).collect(),
+            image: value.image,
         }
     }
 }
@@ -109,7 +111,8 @@ impl TryFrom<TilemapSaved> for TilemapData {
             .collect::<Result<_, _>>()?;
 
         Ok(Self {
-            tiles
+            tiles,
+            image: value.image,
         })
     }
 }
