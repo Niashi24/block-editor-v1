@@ -148,7 +148,7 @@ pub struct TilemapRayHit {
     pub tile: IVec3,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, Serialize, Deserialize)]
 pub struct TilemapData {
     pub tiles: HashMap<IVec3, TileData>,
     pub image: Option<TilemapImage>,
