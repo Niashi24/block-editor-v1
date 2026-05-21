@@ -115,9 +115,10 @@ fn setup_system(
         camera_transform,
     ));
 
+    // illuminace value determined from testing to match original textures
     commands.spawn((
-        DirectionalLight { ..default() },
-        Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, 0.0, -45.0f32.to_radians(), -15.0f32.to_radians())),
+        DirectionalLight { illuminance: 4500.0, shadow_maps_enabled: true, ..default() },
+        Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -30.0f32.to_radians(), -45.0f32.to_radians(), 0.0)),
     ));
 }
 
