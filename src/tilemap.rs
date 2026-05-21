@@ -215,7 +215,7 @@ impl TilemapData {
             pbr_metallic_roughness: PbrMetallicRoughness {
                 base_color_texture: Some(Info {
                     index: texture,
-                    tex_coord: 1,
+                    tex_coord: 0,
                     extensions: Default::default(),
                     extras: Default::default(),
                 }),
