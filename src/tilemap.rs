@@ -1,11 +1,13 @@
 use std::{collections::BTreeMap, f32, fs::{self}, io::Write};
 
-use bevy::{asset::{AssetServer, Assets, RenderAssetUsages}, ecs::{change_detection::DetectChanges, component::Component, entity::Entity, lifecycle::HookContext, system::{Commands, EntityCommand, Query, ResMut}, world::{DeferredWorld, EntityWorldMut, Mut}}, image::Image, math::{Dir3, FloatExt, IVec3, Quat, Ray3d, Vec2, Vec3, bounding::Aabb2d, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::{MeshMaterial3d, StandardMaterial}, platform::collections::HashMap, transform::components::Transform};
+use bevy::{asset::{AssetServer, Assets, RenderAssetUsages}, ecs::{change_detection::DetectChanges, component::Component, entity::Entity, hierarchy::ChildOf, lifecycle::HookContext, system::{Commands, EntityCommand, Query, ResMut}, world::{DeferredWorld, EntityWorldMut, Mut}}, image::Image, math::{Dir3, FloatExt, IVec3, Quat, Ray3d, Vec2, Vec3, bounding::Aabb2d, primitives::Plane3d}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::{MeshMaterial3d, StandardMaterial}, platform::collections::HashMap, transform::components::Transform};
 
 use gltf_json::{self as gltf, material::{EmissiveFactor, PbrMetallicRoughness}, texture::Info, validation::{Checked, USize64}};
 use parry3d::{math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, Shape}};
 use serde::{Serialize, Deserialize};
 use wgpu_types::PrimitiveTopology;
+
+use crate::{Tile3d, TileKind};
 
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
@@ -16,32 +18,32 @@ pub fn tilemap_coord_to_pose(coord: IVec3) -> Pose3 {
     Pose3::from_translation(Vec3P::from_array(tilemap_coord_to_center(coord).to_array()))
 }
 
-#[derive(Default, Component)]
+#[derive(Default)]
 pub struct TilemapCollision {
     bvh: Bvh,
     tile_to_node: HashMap<IVec3, u32>,
-    node_to_shape: HashMap<u32, (Box<dyn Shape>, IVec3)>,
+    node_to_shape: HashMap<u32, (Box<dyn Shape>, IVec3, Entity)>,
     node_idx: u32,
 }
 
-impl<'a> From<&'a TilemapData> for TilemapCollision {
-    fn from(value: &'a TilemapData) -> Self {
-        let mut out = TilemapCollision::default();
+// impl<'a> From<&'a TilemapData> for TilemapCollision {
+//     fn from(value: &'a TilemapData) -> Self {
+//         let mut out = TilemapCollision::default();
 
-        for (pos, tile) in value.tiles.iter() {
-            match tile.tile_type {
-                TileType::Cube(_) => {
-                    out.add_cube(*pos);
-                },
-            }
-        }
+//         for (pos, tile) in value.tiles.iter() {
+//             match tile.tile_type {
+//                 TileType::Cube(_) => {
+//                     out.add_cube(*pos);
+//                 },
+//             }
+//         }
 
-        out
-    }
-}
+//         out
+//     }
+// }
 
 impl TilemapCollision {
-    pub fn add_cube(&mut self, pos: IVec3) {
+    pub fn add_cube(&mut self, pos: IVec3, entity: Entity) {
         self.remove_at(pos);
         let transform = tilemap_coord_to_pose(pos);
 
@@ -50,7 +52,7 @@ impl TilemapCollision {
 
         self.bvh.insert(aabb, self.node_idx);
         self.tile_to_node.insert(pos, self.node_idx);
-        self.node_to_shape.insert(self.node_idx, (Box::new(cube), pos));
+        self.node_to_shape.insert(self.node_idx, (Box::new(cube), pos, entity));
         self.node_idx += 1;
     }
 
@@ -71,12 +73,12 @@ impl TilemapCollision {
         };
 
         let (node, _hit_time) = self.bvh.cast_ray(&ray_parry, f32::INFINITY, |node, best_hit| {
-            let (shape, pos) = &self.node_to_shape[&node];
+            let (shape, pos, entity) = &self.node_to_shape[&node];
             let pose = tilemap_coord_to_pose(*pos);
             shape.cast_ray(&pose, &ray_parry, best_hit, true)
         })?;
 
-        let (shape, pos) = &self.node_to_shape[&node];
+        let (shape, pos, entity) = &self.node_to_shape[&node];
         let pose = tilemap_coord_to_pose(*pos);
         let hit = shape.cast_ray_and_get_normal(&pose, &ray_parry, f32::INFINITY, true).unwrap();
 
@@ -84,6 +86,7 @@ impl TilemapCollision {
             time_of_impact: hit.time_of_impact,
             hit_normal: Vec3::from_array(hit.normal.to_array()),
             tile: *pos,
+            entity: Some(*entity),
         })
     }
 }
@@ -93,9 +96,15 @@ impl TilemapCollision {
 pub struct Tilemap {
     pub data: TilemapData,
     pub collision: TilemapCollision,
+    pub dirty: bool,
 }
 
 impl Tilemap {
+    pub fn get_entity(&self, pos: IVec3) -> Option<Entity> {
+        let id = self.collision.tile_to_node.get(&pos)?;
+        Some(self.collision.node_to_shape.get(id).unwrap().2)
+    }
+
     // pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
     //     self.data.add_cube(tilemap_entity, pos, commands, mesh_assets);
     //     self.collision.add_cube(pos);
@@ -111,23 +120,38 @@ impl Tilemap {
     }
 
     pub fn add_cube(pos: IVec3) -> impl EntityCommand {
-        move |mut world: EntityWorldMut| {
-            let mut tilemap = world.get_mut::<Tilemap>().unwrap();
-            if tilemap.data.get(pos).is_some() { return; }
+        move |world: EntityWorldMut| {
+            let tile_entity = world.get::<Tilemap>().unwrap()
+                .get_entity(pos);
 
-            tilemap.data.add_cube(pos);
-            tilemap.collision.add_cube(pos);
-            Self::regenerate_mesh(world);
+            let tilemap_id = world.id();
+            let world = world.into_world_mut();
+            if let Some(tile_entity) = tile_entity {
+                world.entity_mut(tile_entity)
+                    .insert(Tile3d {
+                        position: pos,
+                        tile_kind: TileKind::Cube,
+                    });
+            } else {
+                world.spawn((
+                    Tile3d {
+                        position: pos,
+                        tile_kind: TileKind::Cube,
+                    },
+                    ChildOf(tilemap_id),
+                ));
+            }
         }
     }
 
     pub fn remove_at(pos: IVec3) -> impl EntityCommand {
-        move |mut world: EntityWorldMut| {
-            let mut tilemap = world.get_mut::<Tilemap>().unwrap();
-            if tilemap.data.get(pos).is_none() { return; }
-            tilemap.data.remove_at(pos);
-            tilemap.collision.remove_at(pos);
-            Self::regenerate_mesh(world);
+        move |world: EntityWorldMut| {
+            let tile_entity = world.get::<Tilemap>().unwrap()
+                .get_entity(pos);
+
+            if let Some(tile_entity) = tile_entity {
+                world.into_world_mut().despawn(tile_entity);
+            }
         }
     }
 
@@ -146,6 +170,8 @@ pub struct TilemapRayHit {
     pub time_of_impact: f32,
     pub hit_normal: Vec3,
     pub tile: IVec3,
+    /// If none, hit the infinite plane instead
+    pub entity: Option<Entity>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -622,7 +648,7 @@ impl Dir {
     }
 }
 
-#[derive(Clone, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct TileData {
     pub tile_type: TileType,
 }
@@ -637,7 +663,7 @@ impl TileData {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub enum TileType {
     Cube([Option<FaceData>; 6]),
 }
@@ -648,7 +674,7 @@ impl TileType {
     }
 }
 
-#[derive(Clone, Copy, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct FaceData {
     tile_idx: u32,
 }

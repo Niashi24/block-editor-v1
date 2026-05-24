@@ -9,13 +9,13 @@ mod scene;
 
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, prelude::*, window::CursorOptions
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, picking::backend::{HitData, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions
 };
 
 
 
 
-use crate::{scene::Scene, tilemap::{Tilemap, TilemapCollision, TilemapImage, TilemapRayHit, tilemap_coord_to_center}};
+use crate::{scene::Scene, tilemap::{TileData, Tilemap, TilemapCollision, TilemapImage, TilemapRayHit, tilemap_coord_to_center}};
 
 fn main() {
 
@@ -28,19 +28,23 @@ fn main() {
             // },
         ))
         .add_systems(Startup, setup_system)
-        .add_systems(Update, (move_system, place_system, load_tilemap))
+        .add_systems(Update, (move_system, place_system, load_tilemap, regenerate_dirty_tilemaps))
         .init_resource::<MeshData>()
         .run();
 }
 
 fn load_tilemap(
-    tilemap_entity: Single<(Entity, &Tilemap)>,
+    mut tilemap_entity: Single<(Entity, &mut Tilemap)>,
     mut camera_entity: Single<&mut Transform, With<Camera>>,
     mut mesh_assets: ResMut<Assets<Mesh>>,
     asset_server: Res<AssetServer>,
     input: Res<ButtonInput<KeyCode>>,
+    tiles: Query<(Entity, &Tile3d)>,
     mut commands: Commands,
 ) {
+    if input.just_pressed(KeyCode::KeyP) {
+        println!("{} tiles", tiles.iter().count());
+    }
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyL) {
         let mut scene = Scene::load().unwrap();
         scene.tilemap_data.image = Some(TilemapImage {
@@ -50,20 +54,29 @@ fn load_tilemap(
             tile_width: 16,
             tile_height: 11,
         });
-        let collision = TilemapCollision::from(&scene.tilemap_data);
-        let mesh = scene.tilemap_data.create_mesh();
-        let tilemap = Tilemap { data: scene.tilemap_data, collision };
 
+        for (e, _tile) in tiles.iter() {
+            commands.entity(e).despawn();
+        }
 
-        let img = match &tilemap.data.image {
+        let img = match &scene.tilemap_data.image {
             Some(img) => asset_server.load::<Image>(&img.path),
             None => asset_server.load("PrototypeTextures/texture_08.png"),
         };
 
         let mat = asset_server.add(StandardMaterial::from(img));
-        let mesh = mesh_assets.add(mesh);
 
-        commands.entity(tilemap_entity.0).insert((tilemap, MeshMaterial3d(mat), Mesh3d(mesh)));
+        let mut tilemap_commands = commands.entity(tilemap_entity.0);
+
+        tilemap_commands.insert(MeshMaterial3d(mat));
+
+        tilemap_entity.1.data.image = scene.tilemap_data.image;
+
+        for (tile, tile_data) in scene.tilemap_data.tiles.iter() {
+            match tile_data.tile_type {
+                tilemap::TileType::Cube(_) => { tilemap_commands.queue(Tilemap::add_cube(*tile)); },
+            }
+        }
 
         **camera_entity = Transform::from_isometry(scene.camera);
     }
@@ -300,6 +313,7 @@ fn place_system(
                             time_of_impact,
                             hit_normal: Vec3::Y,
                             tile,
+                            entity: None,
                         }
                     }
                 };
@@ -329,6 +343,7 @@ fn place_system(
                             time_of_impact,
                             hit_normal: Vec3::Y,
                             tile,
+                            entity: None,
                         }
                     };
 
@@ -350,4 +365,95 @@ fn place_system(
     if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyE) {
         tilemap.data.export();
     }
+}
+
+fn tile_3d_picking_backend(
+    ray_map: Res<RayMap>,
+    camera: Query<&Camera>,
+    tilemaps: Query<&Tilemap>,
+    mut pointer_hits: MessageWriter<PointerHits>,
+) {
+    for (&ray_id, &ray) in ray_map.iter() {
+        let Ok(camera) = camera.get(ray_id.camera) else {
+            continue;
+        };
+
+        let mut picks = Vec::new();
+
+        for tilemap in tilemaps.iter() {
+            let Some(hit) = tilemap.collision.ray_intersection(ray) else {
+                continue;
+            };
+
+
+            let entity = hit.entity.expect("hit plane");
+
+            picks.push((
+                entity,
+                HitData {
+                    camera: ray_id.camera,
+                    depth: hit.time_of_impact,
+                    position: Some(ray.get_point(hit.time_of_impact)),
+                    normal: Some(hit.hit_normal),
+                    extra: None,
+                }
+            ))
+        }
+
+        pointer_hits.write(PointerHits::new(ray_id.pointer, picks, camera.order as f32));
+    }
+}
+
+fn regenerate_dirty_tilemaps(
+    mut tilemaps: Query<(&mut Tilemap, &mut Mesh3d)>,
+    mut meshes: ResMut<Assets<Mesh>>
+) {
+    for (mut tilemap, mut mesh_3d) in tilemaps.iter_mut() {
+        if !tilemap.dirty { continue; }
+
+        let mesh = tilemap.data.create_mesh();
+        let mesh = meshes.add(mesh);
+        mesh_3d.0 = mesh;
+
+        tilemap.dirty = false;
+    }
+}
+
+#[derive(Component, Clone, Debug)]
+#[component(immutable, on_insert, on_discard)]
+pub struct Tile3d {
+    pub position: IVec3,
+    pub tile_kind: TileKind,
+}
+
+#[derive(Clone, Debug)]
+pub enum TileKind {
+    Cube
+}
+
+impl Tile3d {
+    fn on_insert(mut world: DeferredWorld, hook_context: HookContext) {
+        let tile = world.get::<Tile3d>(hook_context.entity).unwrap().clone();
+        let parent = world.get::<ChildOf>(hook_context.entity).unwrap().0;
+        let mut tilemap = world.get_mut::<Tilemap>(parent).unwrap();
+        tilemap.collision.add_cube(tile.position, hook_context.entity);
+        tilemap.data.add_cube(tile.position);
+        tilemap.dirty = true;
+    }
+
+    fn on_discard(mut world: DeferredWorld, hook_context: HookContext) {
+        let tile = world.get::<Tile3d>(hook_context.entity).unwrap().clone();
+        let parent = world.get::<ChildOf>(hook_context.entity).unwrap().0;
+        let mut tilemap = world.get_mut::<Tilemap>(parent).unwrap();
+        tilemap.collision.remove_at(tile.position);
+        tilemap.data.remove_at(tile.position);
+        tilemap.dirty = true;
+    }
+}
+
+#[derive(Component)]
+#[component(immutable)]
+struct Tile2d {
+    tile: IVec3,
+    idx: u32,
 }
