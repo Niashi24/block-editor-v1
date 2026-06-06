@@ -9,7 +9,7 @@ mod scene;
 
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, picking::backend::{HitData, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::{NormedVectorSpace, VectorSpace}, picking::backend::{HitData, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions
 };
 
 
@@ -28,7 +28,7 @@ fn main() {
             // },
         ))
         .add_systems(Startup, setup_system)
-        .add_systems(Update, (move_system, place_system, load_tilemap, regenerate_dirty_tilemaps))
+        .add_systems(Update, (move_system, place_system, update_grid, load_tilemap, regenerate_dirty_tilemaps))
         .init_resource::<MeshData>()
         .run();
 }
@@ -100,6 +100,9 @@ struct SelectionState {
     active_plane: Option<(Vec3, Dir3)>,
 }
 
+#[derive(Component)]
+struct ActiveGrid;
+
 fn setup_system(
     mut commands: Commands,
     mesh_data: Res<MeshData>,
@@ -110,6 +113,17 @@ fn setup_system(
         InfiniteGrid,
         // Optional component you can use to configure the grid
         InfiniteGridSettings::default(),
+    ));
+
+    commands.spawn((
+        InfiniteGrid,
+        ActiveGrid,
+        InfiniteGridSettings {
+            x_axis_color: Color::srgb(0.2, 0.2, 0.2),
+            z_axis_color: Color::srgb(0.2, 0.2, 0.2),
+            ..Default::default()
+        },
+        Visibility::Hidden,
     ));
 
     commands.spawn((
@@ -284,6 +298,25 @@ impl FromWorld for MeshData {
     }
 }
 
+fn update_grid(
+    mut active_grid: Single<(&mut Transform, &mut Visibility), With<ActiveGrid>>,
+    selection_state: Single<&SelectionState>,
+) {
+    match selection_state.active_plane.as_ref() {
+        None => {
+            *active_grid.1 = Visibility::Hidden;
+            *active_grid.0 = Transform::from_translation(Vec3::Y * -100000.0);
+        },
+        Some(&(origin, normal)) => {
+            *active_grid.1 = Visibility::Inherited;
+            *active_grid.0 = Transform::from_translation(origin.floor()).looking_to(Vec3::Y, normal);
+            if (Vec3::Y - normal.as_vec3()).norm_squared() < 1e-3 {
+                active_grid.0.rotation = Quat::IDENTITY;
+            }
+        },
+    }
+}
+
 fn place_system(
     tilemap: Single<(Entity, &Tilemap)>,
     camera: Single<(&Camera, &GlobalTransform, &mut SelectionState)>,
@@ -334,7 +367,7 @@ fn place_system(
                     let ray_hit = {
                         let time_of_impact = ray.intersect_plane(origin, InfinitePlane3d { normal }).unwrap();
                         let mut point = ray.get_point(time_of_impact) + normal * 0.01;
-                        if mouse_input.pressed(MouseButton::Right) {
+                        if !mouse_input.pressed(MouseButton::Left) {
                             point -= *normal;
                         }
 
