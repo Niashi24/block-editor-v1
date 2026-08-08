@@ -1868,6 +1868,7 @@ dependencies = [
  "bevy",
  "bytemuck",
  "gltf-json",
+ "iddqd",
  "parry3d",
  "ron",
  "serde",
@@ -3126,6 +3127,18 @@ name = "id-arena"
 version = "2.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
+
+[[package]]
+name = "iddqd"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d7721c885a97a7c67bc8645958710f3f43b5e7ad8644ce6f43b188a77f05fda7"
+dependencies = [
+ "allocator-api2",
+ "equivalent",
+ "foldhash 0.2.0",
+ "hashbrown 0.16.1",
+]
 
 [[package]]
 name = "image"
