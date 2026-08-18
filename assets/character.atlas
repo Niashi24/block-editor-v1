@@ -1,0 +1,10 @@
+{
+  "sprites": [
+    {
+      "bone": "Foot",
+      "resolution": 3,
+      "index": 0,
+      "z_rotation": 0.0
+    }
+  ]
+}
