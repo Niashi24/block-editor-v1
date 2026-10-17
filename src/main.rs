@@ -9,7 +9,7 @@ mod scene;
 
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::{NormedVectorSpace, VectorSpace}, picking::backend::{HitData, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::{NormedVectorSpace}, picking::backend::{HitData, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions
 };
 
 
@@ -106,7 +106,7 @@ struct ActiveGrid;
 fn setup_system(
     mut commands: Commands,
     mesh_data: Res<MeshData>,
-    // asset_server: Res<AssetServer>,
+    asset_server: Res<AssetServer>,
 ) {
     commands.spawn((
         // You need to spawn an entity with this component
@@ -140,6 +140,11 @@ fn setup_system(
         //     rotation: camera_transform.rotation,
         // },
         camera_transform,
+    ));
+
+    commands.spawn((
+        WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("CharacterTest.glb"))),
+        Transform::IDENTITY,
     ));
 
     // illuminace value determined from testing to match original textures
@@ -365,7 +370,7 @@ fn place_system(
                     selection_state.active_plane = None;
                 } else {
                     let ray_hit = {
-                        let time_of_impact = ray.intersect_plane(origin, InfinitePlane3d { normal }).unwrap();
+                        let time_of_impact = tiny_bail::or_return!(ray.intersect_plane(origin, InfinitePlane3d { normal }));
                         let mut point = ray.get_point(time_of_impact) + normal * 0.01;
                         if !mouse_input.pressed(MouseButton::Left) {
                             point -= *normal;
