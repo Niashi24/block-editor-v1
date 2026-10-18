@@ -1,14 +1,38 @@
-use std::{collections::BTreeMap, f32, fs::{self}, io::Write};
+use std::{
+    collections::BTreeMap,
+    fs::{self},
+    io::Write,
+};
 
-use bevy::{asset::{AssetServer, Assets, RenderAssetUsages}, ecs::{change_detection::DetectChanges, component::Component, entity::Entity, hierarchy::ChildOf, lifecycle::HookContext, system::{Commands, EntityCommand, Query, ResMut}, world::{DeferredWorld, EntityWorldMut, Mut}}, image::Image, math::{Dir3, FloatExt, IVec3, Quat, Vec2, Vec3}, mesh::{Indices, Mesh, Mesh3d, MeshBuilder, Meshable}, pbr::{MeshMaterial3d, StandardMaterial}, platform::collections::HashMap, shape::{Plane3d, Ray3d}, transform::components::Transform};
+use bevy::{
+    asset::{Assets, RenderAssetUsages},
+    ecs::{
+        component::Component, entity::Entity, hierarchy::ChildOf, system::EntityCommand,
+        world::EntityWorldMut,
+    },
+    math::{Dir3, IVec3, Quat, Vec2, Vec3},
+    mesh::{Indices, Mesh, Mesh3d},
+    platform::collections::HashMap,
+    shape::{Plane3d, Ray3d},
+    transform::components::Transform,
+};
 
-use gltf_json::{self as gltf, material::{EmissiveFactor, PbrMetallicRoughness}, texture::Info, validation::{Checked, USize64}};
-use parry3d::{math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, Shape}};
-use serde::{Serialize, Deserialize};
+use gltf_json::{
+    self as gltf,
+    material::{EmissiveFactor, PbrMetallicRoughness},
+    texture::Info,
+    validation::{Checked, USize64},
+};
+use parry3d::{
+    math::{Pose3, Vec3 as Vec3P, Vector},
+    partitioning::Bvh,
+    query::Ray,
+    shape::{Cuboid, Shape},
+};
+use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
 use crate::{Tile3d, TileKind};
-
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -52,7 +76,8 @@ impl TilemapCollision {
 
         self.bvh.insert(aabb, self.node_idx);
         self.tile_to_node.insert(pos, self.node_idx);
-        self.node_to_shape.insert(self.node_idx, (Box::new(cube), pos, entity));
+        self.node_to_shape
+            .insert(self.node_idx, (Box::new(cube), pos, entity));
         self.node_idx += 1;
     }
 
@@ -72,15 +97,19 @@ impl TilemapCollision {
             dir: Vec3P::from_array(ray.direction.to_array()),
         };
 
-        let (node, _hit_time) = self.bvh.cast_ray(&ray_parry, f32::INFINITY, |node, best_hit| {
-            let (shape, pos, entity) = &self.node_to_shape[&node];
-            let pose = tilemap_coord_to_pose(*pos);
-            shape.cast_ray(&pose, &ray_parry, best_hit, true)
-        })?;
+        let (node, _hit_time) =
+            self.bvh
+                .cast_ray(&ray_parry, f32::INFINITY, |node, best_hit| {
+                    let (shape, pos, _entity) = &self.node_to_shape[&node];
+                    let pose = tilemap_coord_to_pose(*pos);
+                    shape.cast_ray(&pose, &ray_parry, best_hit, true)
+                })?;
 
         let (shape, pos, entity) = &self.node_to_shape[&node];
         let pose = tilemap_coord_to_pose(*pos);
-        let hit = shape.cast_ray_and_get_normal(&pose, &ray_parry, f32::INFINITY, true).unwrap();
+        let hit = shape
+            .cast_ray_and_get_normal(&pose, &ray_parry, f32::INFINITY, true)
+            .unwrap();
 
         Some(TilemapRayHit {
             time_of_impact: hit.time_of_impact,
@@ -121,17 +150,15 @@ impl Tilemap {
 
     pub fn add_cube(pos: IVec3) -> impl EntityCommand {
         move |world: EntityWorldMut| {
-            let tile_entity = world.get::<Tilemap>().unwrap()
-                .get_entity(pos);
+            let tile_entity = world.get::<Tilemap>().unwrap().get_entity(pos);
 
             let tilemap_id = world.id();
             let world = world.into_world_mut();
             if let Some(tile_entity) = tile_entity {
-                world.entity_mut(tile_entity)
-                    .insert(Tile3d {
-                        position: pos,
-                        tile_kind: TileKind::Cube,
-                    });
+                world.entity_mut(tile_entity).insert(Tile3d {
+                    position: pos,
+                    tile_kind: TileKind::Cube,
+                });
             } else {
                 world.spawn((
                     Tile3d {
@@ -146,8 +173,7 @@ impl Tilemap {
 
     pub fn remove_at(pos: IVec3) -> impl EntityCommand {
         move |world: EntityWorldMut| {
-            let tile_entity = world.get::<Tilemap>().unwrap()
-                .get_entity(pos);
+            let tile_entity = world.get::<Tilemap>().unwrap().get_entity(pos);
 
             if let Some(tile_entity) = tile_entity {
                 world.into_world_mut().despawn(tile_entity);
@@ -158,11 +184,10 @@ impl Tilemap {
     fn regenerate_mesh(mut world: EntityWorldMut) {
         let tilemap = world.get::<Tilemap>().unwrap();
         let mesh = tilemap.data.create_mesh();
-        let mesh = world.resource_scope::<Assets<Mesh>, _>(|_, mut mesh_assets| mesh_assets.add(mesh));
+        let mesh =
+            world.resource_scope::<Assets<Mesh>, _>(|_, mut mesh_assets| mesh_assets.add(mesh));
 
-        world.insert((
-            Mesh3d(mesh),
-        ));
+        world.insert((Mesh3d(mesh),));
     }
 }
 
@@ -180,14 +205,18 @@ pub struct TilemapData {
     pub image: Option<TilemapImage>,
 }
 
-
 impl TilemapData {
     pub fn add_cube(&mut self, pos: IVec3) {
-        if self.tiles.contains_key(&pos) { return; }
+        if self.tiles.contains_key(&pos) {
+            return;
+        }
 
-        self.tiles.insert(pos, TileData {
-            tile_type: TileType::default_cube(),
-        });
+        self.tiles.insert(
+            pos,
+            TileData {
+                tile_type: TileType::default_cube(),
+            },
+        );
     }
 
     pub fn get(&self, pos: IVec3) -> Option<&TileData> {
@@ -199,10 +228,12 @@ impl TilemapData {
     }
 
     pub fn export(&self) {
-
         let mut root = gltf::Root::default();
 
-        let image_path = self.image.as_ref().map(|img| img.path.clone())
+        let image_path = self
+            .image
+            .as_ref()
+            .map(|img| img.path.clone())
             .unwrap_or_else(|| "PrototypeTextures.png".to_string());
         let image_path = format!("../assets/{}", image_path);
 
@@ -255,9 +286,7 @@ impl TilemapData {
             extras: Default::default(),
         });
 
-        let meshes = [
-            self.create_mesh()
-        ];
+        let meshes = [self.create_mesh()];
 
         let mut buf = Vec::new();
         struct MeshBuffer {
@@ -272,7 +301,6 @@ impl TilemapData {
         }
         let mut mesh_buffers = Vec::with_capacity(meshes.len());
         for mesh in meshes {
-
             let position = mesh.attribute(Mesh::ATTRIBUTE_POSITION.id).unwrap();
             let mut min = [f32::MAX; 3];
             let mut max = [f32::MIN; 3];
@@ -403,14 +431,12 @@ impl TilemapData {
                             gltf::accessor::ComponentType::U16 => 2,
                             gltf::accessor::ComponentType::U32 => 4,
                             _ => unreachable!(),
-                        }
+                        },
                 ),
                 byte_offset: Some(USize64::from(view.indices_offset)),
                 byte_stride: None,
                 name: None,
-                target: Some(Checked::Valid(
-                    gltf::buffer::Target::ElementArrayBuffer
-                )),
+                target: Some(Checked::Valid(gltf::buffer::Target::ElementArrayBuffer)),
                 extensions: Default::default(),
                 extras: Default::default(),
             });
@@ -418,7 +444,9 @@ impl TilemapData {
                 buffer_view: Some(indices_buffer_view),
                 byte_offset: Some(USize64(0)),
                 count: USize64::from(view.index_count),
-                component_type: Checked::Valid(gltf_json::accessor::GenericComponentType(view.indices_component_type)),
+                component_type: Checked::Valid(gltf_json::accessor::GenericComponentType(
+                    view.indices_component_type,
+                )),
                 extensions: Default::default(),
                 extras: Default::default(),
                 type_: Checked::Valid(gltf::accessor::Type::Scalar),
@@ -427,7 +455,6 @@ impl TilemapData {
                 name: None,
                 normalized: false,
                 sparse: None,
-
             });
 
             let primitive = gltf::mesh::Primitive {
@@ -477,31 +504,39 @@ impl TilemapData {
         writer.write_all(&buf).unwrap();
 
         println!("Successfully exported.");
-
     }
 
     pub fn create_mesh(&self) -> Mesh {
-        let mut mesh = Mesh::new(wgpu_types::PrimitiveTopology::TriangleList, RenderAssetUsages::default())
-            .with_inserted_indices(Indices::U32(vec![]))
-            .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<Vec3>::new())
-            .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, Vec::<[f32; 3]>::new())
-            .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
+        let mut mesh = Mesh::new(
+            wgpu_types::PrimitiveTopology::TriangleList,
+            RenderAssetUsages::default(),
+        )
+        .with_inserted_indices(Indices::U32(vec![]))
+        .with_inserted_attribute(Mesh::ATTRIBUTE_POSITION, Vec::<Vec3>::new())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_NORMAL, Vec::<[f32; 3]>::new())
+        .with_inserted_attribute(Mesh::ATTRIBUTE_UV_0, Vec::<[f32; 2]>::new());
 
         for (pos, tile) in self.tiles.iter() {
             match tile.tile_type {
                 TileType::Cube(face_data) => {
-
                     for (i, dir) in Dir::DIRS.into_iter().enumerate() {
                         let new_pos = *pos + dir.as_ivec3();
-                        if self.tiles.get(&new_pos).is_none_or(|tile| !tile.covers_dir(&dir.inv())) {
+                        if self
+                            .tiles
+                            .get(&new_pos)
+                            .is_none_or(|tile| !tile.covers_dir(&dir.inv()))
+                        {
                             let translation = tilemap_coord_to_center(*pos) + 0.5 * dir.as_dir3();
-                            let plane = Plane3d {
+                            let _plane = Plane3d {
                                 normal: dir.as_dir3(),
                                 half_size: Vec2::splat(0.5),
                             };
 
                             let face = face_data[i];
-                            let uv = face.and_then(|face| self.image.as_ref().map(|img| img.uv(face.tile_idx)))
+                            let uv = face
+                                .and_then(|face| {
+                                    self.image.as_ref().map(|img| img.uv(face.tile_idx))
+                                })
                                 .unwrap_or([[0.0; 2], [1.0; 2]]);
                             // let uv = [[0.0; 2], [1.0; 2]];
 
@@ -513,7 +548,7 @@ impl TilemapData {
                             // meshes.push(plane_mesh);
                         }
                     }
-                },
+                }
             }
         }
 
@@ -576,11 +611,12 @@ impl TilemapImage {
         let (tl_x, tl_y) = (tl_x * self.tile_width, tl_y * self.tile_height);
         let (br_x, br_y) = (tl_x + self.tile_width, tl_y + self.tile_height);
 
-        [[tl_x, tl_y], [br_x, br_y]]
-            .map(|f| [
+        [[tl_x, tl_y], [br_x, br_y]].map(|f| {
+            [
                 f[0] as f32 / self.image_width as f32,
                 f[1] as f32 / self.image_height as f32,
-            ])
+            ]
+        })
     }
 
     fn tiles_wide(&self) -> u32 {
@@ -605,14 +641,7 @@ pub enum Dir {
 }
 
 impl Dir {
-    pub const DIRS: [Dir; 6] = [
-        Dir::Z,
-        Dir::NegZ,
-        Dir::X,
-        Dir::NegX,
-        Dir::Y,
-        Dir::NegY,
-    ];
+    pub const DIRS: [Dir; 6] = [Dir::Z, Dir::NegZ, Dir::X, Dir::NegX, Dir::Y, Dir::NegY];
 
     fn inv(self) -> Self {
         match self {
@@ -656,9 +685,7 @@ pub struct TileData {
 impl TileData {
     pub fn covers_dir(&self, _dir: &Dir) -> bool {
         match self.tile_type {
-            TileType::Cube(_) => {
-                true
-            },
+            TileType::Cube(_) => true,
         }
     }
 }

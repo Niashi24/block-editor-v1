@@ -4,21 +4,25 @@
 //! as they provide a consistent reference for the orientation of objects
 //! and an evenly spaced grid to judge relative scale.
 
-mod tilemap;
 mod scene;
-
+mod tilemap;
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::{NormedVectorSpace}, picking::backend::{HitData, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
+    math::NormedVectorSpace,
+    picking::backend::{HitData, PointerHits, ray::RayMap},
+    prelude::*,
+    window::CursorOptions,
 };
 
-
-
-
-use crate::{scene::Scene, tilemap::{TileData, Tilemap, TilemapCollision, TilemapImage, TilemapRayHit, tilemap_coord_to_center}};
+use crate::{
+    scene::Scene,
+    tilemap::{Tilemap, TilemapImage, TilemapRayHit, tilemap_coord_to_center},
+};
 
 fn main() {
-
     App::new()
         .add_plugins((
             DefaultPlugins.set(ImagePlugin::default_nearest()),
@@ -28,7 +32,16 @@ fn main() {
             // },
         ))
         .add_systems(Startup, setup_system)
-        .add_systems(Update, (move_system, place_system, update_grid, load_tilemap, regenerate_dirty_tilemaps))
+        .add_systems(
+            Update,
+            (
+                move_system,
+                place_system,
+                update_grid,
+                load_tilemap,
+                regenerate_dirty_tilemaps,
+            ),
+        )
         .init_resource::<MeshData>()
         .run();
 }
@@ -36,7 +49,7 @@ fn main() {
 fn load_tilemap(
     mut tilemap_entity: Single<(Entity, &mut Tilemap)>,
     mut camera_entity: Single<&mut Transform, With<Camera>>,
-    mut mesh_assets: ResMut<Assets<Mesh>>,
+    _mesh_assets: ResMut<Assets<Mesh>>,
     asset_server: Res<AssetServer>,
     input: Res<ButtonInput<KeyCode>>,
     tiles: Query<(Entity, &Tile3d)>,
@@ -74,7 +87,9 @@ fn load_tilemap(
 
         for (tile, tile_data) in scene.tilemap_data.tiles.iter() {
             match tile_data.tile_type {
-                tilemap::TileType::Cube(_) => { tilemap_commands.queue(Tilemap::add_cube(*tile)); },
+                tilemap::TileType::Cube(_) => {
+                    tilemap_commands.queue(Tilemap::add_cube(*tile));
+                }
             }
         }
 
@@ -103,11 +118,7 @@ struct SelectionState {
 #[derive(Component)]
 struct ActiveGrid;
 
-fn setup_system(
-    mut commands: Commands,
-    mesh_data: Res<MeshData>,
-    asset_server: Res<AssetServer>,
-) {
+fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>) {
     commands.spawn((
         // You need to spawn an entity with this component
         InfiniteGrid,
@@ -128,10 +139,11 @@ fn setup_system(
 
     commands.spawn((
         Tilemap::default(),
-        MeshMaterial3d(mesh_data.cube_material.clone())
+        MeshMaterial3d(mesh_data.cube_material.clone()),
     ));
 
-    let camera_transform = Transform::from_xyz(-12.5, 5.0, 10.0).with_rotation(Quat::from_rotation_x(-45.0f32.to_radians()));
+    let camera_transform = Transform::from_xyz(-12.5, 5.0, 10.0)
+        .with_rotation(Quat::from_rotation_x(-45.0f32.to_radians()));
     commands.spawn((
         Camera3d::default(),
         SelectionState::default(),
@@ -149,12 +161,25 @@ fn setup_system(
 
     // illuminace value determined from testing to match original textures
     commands.spawn((
-        DirectionalLight { illuminance: 4500.0, shadow_maps_enabled: true, ..default() },
-        Transform::from_rotation(Quat::from_euler(EulerRot::YXZ, -30.0f32.to_radians(), -45.0f32.to_radians(), 0.0)),
+        DirectionalLight {
+            illuminance: 4500.0,
+            shadow_maps_enabled: true,
+            ..default()
+        },
+        Transform::from_rotation(Quat::from_euler(
+            EulerRot::YXZ,
+            -30.0f32.to_radians(),
+            -45.0f32.to_radians(),
+            0.0,
+        )),
     ));
 }
 
-pub fn intersect_plane_full(ray: &Ray3d, plane_origin: Vec3, plane: InfinitePlane3d) -> Option<f32> {
+pub fn intersect_plane_full(
+    ray: &Ray3d,
+    plane_origin: Vec3,
+    plane: InfinitePlane3d,
+) -> Option<f32> {
     let denominator = plane.normal.dot(*ray.direction);
     if ops::abs(denominator) <= f32::EPSILON {
         return None;
@@ -185,8 +210,16 @@ fn move_system(
         scroll_speed *= 2.0;
     }
 
-    let forward = camera_transform.forward().as_vec3().with_y(0.0).normalize_or_zero();
-    let right = camera_transform.right().as_vec3().with_y(0.0).normalize_or_zero();
+    let forward = camera_transform
+        .forward()
+        .as_vec3()
+        .with_y(0.0)
+        .normalize_or_zero();
+    let right = camera_transform
+        .right()
+        .as_vec3()
+        .with_y(0.0)
+        .normalize_or_zero();
 
     // let mut translation = Vec3::ZERO;
     // if key_input.pressed(KeyCode::KeyA) {
@@ -223,10 +256,7 @@ fn move_system(
         camera_transform.translation.y = camera_transform.translation.y.max(5.0);
     }
 
-
-
-    if let Some(_cursor_position) = window.cursor_position()
-    {
+    if let Some(_cursor_position) = window.cursor_position() {
         // let previous = cursor_position - accumulated_mouse_motion.delta;
         // let previous_point = get_world_point(previous, camera, camera_gb_transform).unwrap();
         // let new_point = get_world_point(cursor_position, camera, camera_gb_transform).unwrap();
@@ -256,9 +286,10 @@ fn move_system(
         //
 
         if mouse_input.pressed(MouseButton::Middle) {
-            camera_transform.translation += move_speed * (accumulated_mouse_motion.delta.y * forward - accumulated_mouse_motion.delta.x * right);
+            camera_transform.translation += move_speed
+                * (accumulated_mouse_motion.delta.y * forward
+                    - accumulated_mouse_motion.delta.x * right);
         }
-
     }
 
     // if mouse_input.just_pressed(MouseButton::Middle) {
@@ -274,9 +305,19 @@ fn move_system(
     if key_input.just_pressed(KeyCode::Numpad2) {
         camera_transform.rotation = Quat::from_rotation_x(-45.0f32.to_radians());
     } else if key_input.just_pressed(KeyCode::Numpad1) {
-        camera_transform.rotation = Quat::from_euler(EulerRot::YXZ, 45.0f32.to_radians(), -45.0f32.to_radians(), 0.0);
+        camera_transform.rotation = Quat::from_euler(
+            EulerRot::YXZ,
+            45.0f32.to_radians(),
+            -45.0f32.to_radians(),
+            0.0,
+        );
     } else if key_input.just_pressed(KeyCode::Numpad3) {
-        camera_transform.rotation = Quat::from_euler(EulerRot::YXZ, -45.0f32.to_radians(), -45.0f32.to_radians(), 0.0);
+        camera_transform.rotation = Quat::from_euler(
+            EulerRot::YXZ,
+            -45.0f32.to_radians(),
+            -45.0f32.to_radians(),
+            0.0,
+        );
     }
 }
 
@@ -288,13 +329,17 @@ pub struct MeshData {
 
 impl FromWorld for MeshData {
     fn from_world(world: &mut World) -> Self {
-        let cube_mesh = world.resource_mut::<Assets<Mesh>>().add(Cuboid::new(1.0, 1.0, 1.0));
+        let cube_mesh = world
+            .resource_mut::<Assets<Mesh>>()
+            .add(Cuboid::new(1.0, 1.0, 1.0));
         let asset_server = world.resource_mut::<AssetServer>();
         let image = asset_server.load::<Image>("atlas.png");
         let mut material = StandardMaterial::from(image);
 
         material.perceptual_roughness = 1.0;
-        let cube_material = world.resource_mut::<Assets<StandardMaterial>>().add(material);
+        let cube_material = world
+            .resource_mut::<Assets<StandardMaterial>>()
+            .add(material);
 
         Self {
             cube_mesh,
@@ -311,14 +356,15 @@ fn update_grid(
         None => {
             *active_grid.1 = Visibility::Hidden;
             *active_grid.0 = Transform::from_translation(Vec3::Y * -100000.0);
-        },
+        }
         Some(&(origin, normal)) => {
             *active_grid.1 = Visibility::Inherited;
-            *active_grid.0 = Transform::from_translation(origin.floor()).looking_to(Vec3::Y, normal);
+            *active_grid.0 =
+                Transform::from_translation(origin.floor()).looking_to(Vec3::Y, normal);
             if (Vec3::Y - normal.as_vec3()).norm_squared() < 1e-3 {
                 active_grid.0.rotation = Quat::IDENTITY;
             }
-        },
+        }
     }
 }
 
@@ -329,7 +375,7 @@ fn place_system(
     mouse_input: Res<ButtonInput<MouseButton>>,
     key_input: Res<ButtonInput<KeyCode>>,
     _mesh_data: Res<MeshData>,
-    mut mesh_assets: ResMut<Assets<Mesh>>,
+    _mesh_assets: ResMut<Assets<Mesh>>,
     mut gizmos: Gizmos,
     mut commands: Commands,
 ) {
@@ -337,7 +383,9 @@ fn place_system(
     let (tilemap_entity, tilemap) = tilemap.into_inner();
 
     if let Some(cursor_position) = window.cursor_position() {
-        let ray = camera.viewport_to_world(transform, cursor_position).unwrap();
+        let ray = camera
+            .viewport_to_world(transform, cursor_position)
+            .unwrap();
 
         match selection_state.active_plane.as_ref() {
             None => {
@@ -345,8 +393,12 @@ fn place_system(
                     if let Some(hit) = tilemap.ray_intersection(ray) {
                         hit
                     } else {
-                        let time_of_impact = ray.intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y }).unwrap();
-                        let tile = (ray.get_point(time_of_impact) + Dir3::Y * 0.01).floor().as_ivec3();
+                        let time_of_impact = ray
+                            .intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y })
+                            .unwrap();
+                        let tile = (ray.get_point(time_of_impact) + Dir3::Y * 0.01)
+                            .floor()
+                            .as_ivec3();
                         TilemapRayHit {
                             time_of_impact,
                             hit_normal: Vec3::Y,
@@ -356,21 +408,39 @@ fn place_system(
                     }
                 };
 
-                gizmos.circle(Isometry3d::new(ray.get_point(ray_hit.time_of_impact), Transform::default().looking_to(ray_hit.hit_normal, Vec3::Y).rotation), 0.125, Color::WHITE);
+                gizmos.circle(
+                    Isometry3d::new(
+                        ray.get_point(ray_hit.time_of_impact),
+                        Transform::default()
+                            .looking_to(ray_hit.hit_normal, Vec3::Y)
+                            .rotation,
+                    ),
+                    0.125,
+                    Color::WHITE,
+                );
 
-
-                gizmos.cube(Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)), Color::WHITE);
+                gizmos.cube(
+                    Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
+                    Color::WHITE,
+                );
 
                 if mouse_input.any_pressed([MouseButton::Left, MouseButton::Right]) {
-                    selection_state.active_plane = Some((ray.get_point(ray_hit.time_of_impact), Dir3::new(ray_hit.hit_normal).unwrap()));
+                    selection_state.active_plane = Some((
+                        ray.get_point(ray_hit.time_of_impact),
+                        Dir3::new(ray_hit.hit_normal).unwrap(),
+                    ));
                 }
-            },
+            }
             Some(&(origin, normal)) => {
-                if !mouse_input.pressed(MouseButton::Left) && !mouse_input.pressed(MouseButton::Right) {
+                if !mouse_input.pressed(MouseButton::Left)
+                    && !mouse_input.pressed(MouseButton::Right)
+                {
                     selection_state.active_plane = None;
                 } else {
                     let ray_hit = {
-                        let time_of_impact = tiny_bail::or_return!(ray.intersect_plane(origin, InfinitePlane3d { normal }));
+                        let time_of_impact = tiny_bail::or_return!(
+                            ray.intersect_plane(origin, InfinitePlane3d { normal })
+                        );
                         let mut point = ray.get_point(time_of_impact) + normal * 0.01;
                         if !mouse_input.pressed(MouseButton::Left) {
                             point -= *normal;
@@ -385,18 +455,33 @@ fn place_system(
                         }
                     };
 
-                    gizmos.circle(Isometry3d::new(ray.get_point(ray_hit.time_of_impact), Transform::default().looking_to(ray_hit.hit_normal, Vec3::Y).rotation), 0.125, Color::WHITE);
+                    gizmos.circle(
+                        Isometry3d::new(
+                            ray.get_point(ray_hit.time_of_impact),
+                            Transform::default()
+                                .looking_to(ray_hit.hit_normal, Vec3::Y)
+                                .rotation,
+                        ),
+                        0.125,
+                        Color::WHITE,
+                    );
 
-
-                    gizmos.cube(Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)), Color::WHITE);
+                    gizmos.cube(
+                        Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
+                        Color::WHITE,
+                    );
 
                     if mouse_input.pressed(MouseButton::Left) {
-                        commands.entity(tilemap_entity).queue(Tilemap::add_cube(ray_hit.tile));
+                        commands
+                            .entity(tilemap_entity)
+                            .queue(Tilemap::add_cube(ray_hit.tile));
                     } else {
-                        commands.entity(tilemap_entity).queue(Tilemap::remove_at(ray_hit.tile));
+                        commands
+                            .entity(tilemap_entity)
+                            .queue(Tilemap::remove_at(ray_hit.tile));
                     }
                 }
-            },
+            }
         }
     }
 
@@ -423,7 +508,6 @@ fn tile_3d_picking_backend(
                 continue;
             };
 
-
             let entity = hit.entity.expect("hit plane");
 
             picks.push((
@@ -434,7 +518,7 @@ fn tile_3d_picking_backend(
                     position: Some(ray.get_point(hit.time_of_impact)),
                     normal: Some(hit.hit_normal),
                     extra: None,
-                }
+                },
             ))
         }
 
@@ -444,10 +528,12 @@ fn tile_3d_picking_backend(
 
 fn regenerate_dirty_tilemaps(
     mut tilemaps: Query<(&mut Tilemap, &mut Mesh3d)>,
-    mut meshes: ResMut<Assets<Mesh>>
+    mut meshes: ResMut<Assets<Mesh>>,
 ) {
     for (mut tilemap, mut mesh_3d) in tilemaps.iter_mut() {
-        if !tilemap.dirty { continue; }
+        if !tilemap.dirty {
+            continue;
+        }
 
         let mesh = tilemap.data.create_mesh();
         let mesh = meshes.add(mesh);
@@ -466,7 +552,7 @@ pub struct Tile3d {
 
 #[derive(Clone, Debug)]
 pub enum TileKind {
-    Cube
+    Cube,
 }
 
 impl Tile3d {
@@ -474,7 +560,9 @@ impl Tile3d {
         let tile = world.get::<Tile3d>(hook_context.entity).unwrap().clone();
         let parent = world.get::<ChildOf>(hook_context.entity).unwrap().0;
         let mut tilemap = world.get_mut::<Tilemap>(parent).unwrap();
-        tilemap.collision.add_cube(tile.position, hook_context.entity);
+        tilemap
+            .collision
+            .add_cube(tile.position, hook_context.entity);
         tilemap.data.add_cube(tile.position);
         tilemap.dirty = true;
     }
