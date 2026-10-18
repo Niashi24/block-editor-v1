@@ -16,6 +16,7 @@ use bevy::{
     prelude::*,
     window::CursorOptions,
 };
+use tiny_bail::or_continue;
 
 use crate::{
     scene::Scene,
@@ -44,6 +45,46 @@ fn main() {
         )
         .init_resource::<MeshData>()
         .run();
+}
+
+fn update_hits(
+    ray_map: Res<RayMap>,
+    mut output_messages: MessageWriter<PointerHits>,
+    mut camera: Query<(&Camera, &mut SelectionState)>,
+    tilemap: Single<(Entity, &Tilemap)>,
+) {
+    let (tilemap_entity, tilemap) = tilemap.into_inner();
+    for (&ray_id, &ray) in ray_map.iter() {
+        let (camera, selection_state) = or_continue!(camera.get(ray_id.camera));
+
+        let pick = match selection_state.active_plane.as_ref() {
+            None => {
+                if let Some(hit) = tilemap.ray_intersection(ray)
+                    && let Some(e) = hit.entity
+                {
+                    (
+                        e,
+                        HitData {
+                            camera: ray_id.camera,
+                            depth: hit.time_of_impact,
+                            position: Some(ray.get_point(hit.time_of_impact)),
+                            normal: Some(hit.hit_normal),
+                            extra: None,
+                        },
+                    )
+                } else {
+                    todo!()
+                }
+            }
+            Some(_) => todo!(),
+        };
+
+        output_messages.write(PointerHits {
+            pointer: ray_id.pointer,
+            picks: vec![pick],
+            order: camera.order as f32,
+        });
+    }
 }
 
 fn load_tilemap(
