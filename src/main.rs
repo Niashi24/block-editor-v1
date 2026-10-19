@@ -7,10 +7,13 @@
 mod scene;
 mod tilemap;
 
+use std::sync::Arc;
+
 use bevy::{
     dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
     ecs::{lifecycle::HookContext, world::DeferredWorld},
     input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
+    log::tracing_subscriber::filter::combinator::And,
     math::NormedVectorSpace,
     picking::backend::{HitData, PointerHits, ray::RayMap},
     prelude::*,
@@ -41,10 +44,38 @@ fn main() {
                 update_grid,
                 load_tilemap,
                 regenerate_dirty_tilemaps,
+                update_hits,
             ),
         )
         .init_resource::<MeshData>()
         .run();
+}
+
+fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Gizmos) {
+    let PointerMove {
+        entity: _,
+        pointer: _,
+        delta: _,
+        hit,
+    } = event.event();
+
+    let tile = *hit.extra_as::<IVec3>().unwrap();
+
+    gizmos.circle(
+        Isometry3d::new(
+            hit.position.unwrap(),
+            Transform::default()
+                .looking_to(hit.normal.unwrap(), Vec3::Y)
+                .rotation,
+        ),
+        0.125,
+        Color::WHITE,
+    );
+
+    gizmos.cube(
+        Transform::from_translation(tilemap_coord_to_center(tile)),
+        Color::WHITE,
+    );
 }
 
 fn update_hits(
@@ -52,6 +83,8 @@ fn update_hits(
     mut output_messages: MessageWriter<PointerHits>,
     mut camera: Query<(&Camera, &mut SelectionState)>,
     tilemap: Single<(Entity, &Tilemap)>,
+    grid: Single<Entity, (With<InfiniteGrid>, Without<ActiveGrid>)>,
+    active_grid: Single<Entity, (With<InfiniteGrid>, With<ActiveGrid>)>,
 ) {
     let (tilemap_entity, tilemap) = tilemap.into_inner();
     for (&ray_id, &ray) in ray_map.iter() {
@@ -62,26 +95,58 @@ fn update_hits(
                 if let Some(hit) = tilemap.ray_intersection(ray)
                     && let Some(e) = hit.entity
                 {
-                    (
+                    Some((
                         e,
                         HitData {
                             camera: ray_id.camera,
                             depth: hit.time_of_impact,
                             position: Some(ray.get_point(hit.time_of_impact)),
                             normal: Some(hit.hit_normal),
-                            extra: None,
+                            extra: Some(std::sync::Arc::new(hit.tile)),
                         },
-                    )
+                    ))
                 } else {
-                    todo!()
+                    ray.intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y })
+                        .map(|time_of_impact| {
+                            let tile = (ray.get_point(time_of_impact) + Dir3::Y * 0.01)
+                                .floor()
+                                .as_ivec3();
+                            (
+                                *grid,
+                                HitData {
+                                    camera: ray_id.camera,
+                                    depth: time_of_impact,
+                                    position: Some(ray.get_point(time_of_impact)),
+                                    normal: Some(Vec3::Y),
+                                    extra: Some(std::sync::Arc::new(tile)),
+                                },
+                            )
+                        })
                 }
             }
-            Some(_) => todo!(),
+            Some(&(origin, normal)) => {
+                ray.intersect_plane(origin, InfinitePlane3d { normal })
+                    .map(|time_of_impact| {
+                        let point = ray.get_point(time_of_impact) + normal * 0.01;
+
+                        let tile = point.floor().as_ivec3();
+                        (
+                            *active_grid,
+                            HitData {
+                                camera: ray_id.camera,
+                                depth: time_of_impact,
+                                position: Some(ray.get_point(time_of_impact)),
+                                normal: Some(normal.as_vec3()),
+                                extra: Some(Arc::new(tile)),
+                            },
+                        )
+                    })
+            }
         };
 
         output_messages.write(PointerHits {
             pointer: ray_id.pointer,
-            picks: vec![pick],
+            picks: Vec::from(pick.as_slice()),
             order: camera.order as f32,
         });
     }
@@ -156,27 +221,51 @@ struct SelectionState {
     active_plane: Option<(Vec3, Dir3)>,
 }
 
+#[derive(Debug)]
+struct ActivePlane {
+    pub depth: i32,
+    pub normal: IVec3,
+}
+
+impl ActivePlane {
+    pub fn ray_intersection(&self, ray: Ray3d) -> Option<IVec3> {
+        todo!()
+    }
+}
+
+#[derive(Component, Default, Debug)]
+enum SelectionState2 {
+    #[default]
+    None,
+    Adding(ActivePlane),
+    Removing(ActivePlane),
+}
+
 #[derive(Component)]
 struct ActiveGrid;
 
 fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>) {
-    commands.spawn((
-        // You need to spawn an entity with this component
-        InfiniteGrid,
-        // Optional component you can use to configure the grid
-        InfiniteGridSettings::default(),
-    ));
+    commands
+        .spawn((
+            // You need to spawn an entity with this component
+            InfiniteGrid,
+            // Optional component you can use to configure the grid
+            InfiniteGridSettings::default(),
+        ))
+        .observe(observe_draw_hit_gizmos);
 
-    commands.spawn((
-        InfiniteGrid,
-        ActiveGrid,
-        InfiniteGridSettings {
-            x_axis_color: Color::srgb(0.2, 0.2, 0.2),
-            z_axis_color: Color::srgb(0.2, 0.2, 0.2),
-            ..Default::default()
-        },
-        Visibility::Hidden,
-    ));
+    commands
+        .spawn((
+            InfiniteGrid,
+            ActiveGrid,
+            InfiniteGridSettings {
+                x_axis_color: Color::srgb(0.2, 0.2, 0.2),
+                z_axis_color: Color::srgb(0.2, 0.2, 0.2),
+                ..Default::default()
+            },
+            Visibility::Hidden,
+        ))
+        .observe(observe_draw_hit_gizmos);
 
     commands.spawn((
         Tilemap::default(),
@@ -396,7 +485,7 @@ fn update_grid(
     match selection_state.active_plane.as_ref() {
         None => {
             *active_grid.1 = Visibility::Hidden;
-            *active_grid.0 = Transform::from_translation(Vec3::Y * -100000.0);
+            // *active_grid.0 = Transform::from_translation(Vec3::Y * -100000.0);
         }
         Some(&(origin, normal)) => {
             *active_grid.1 = Visibility::Inherited;
@@ -449,21 +538,21 @@ fn place_system(
                     }
                 };
 
-                gizmos.circle(
-                    Isometry3d::new(
-                        ray.get_point(ray_hit.time_of_impact),
-                        Transform::default()
-                            .looking_to(ray_hit.hit_normal, Vec3::Y)
-                            .rotation,
-                    ),
-                    0.125,
-                    Color::WHITE,
-                );
+                // gizmos.circle(
+                //     Isometry3d::new(
+                //         ray.get_point(ray_hit.time_of_impact),
+                //         Transform::default()
+                //             .looking_to(ray_hit.hit_normal, Vec3::Y)
+                //             .rotation,
+                //     ),
+                //     0.125,
+                //     Color::WHITE,
+                // );
 
-                gizmos.cube(
-                    Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
-                    Color::WHITE,
-                );
+                // gizmos.cube(
+                //     Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
+                //     Color::WHITE,
+                // );
 
                 if mouse_input.any_pressed([MouseButton::Left, MouseButton::Right]) {
                     selection_state.active_plane = Some((
@@ -496,21 +585,21 @@ fn place_system(
                         }
                     };
 
-                    gizmos.circle(
-                        Isometry3d::new(
-                            ray.get_point(ray_hit.time_of_impact),
-                            Transform::default()
-                                .looking_to(ray_hit.hit_normal, Vec3::Y)
-                                .rotation,
-                        ),
-                        0.125,
-                        Color::WHITE,
-                    );
+                    // gizmos.circle(
+                    //     Isometry3d::new(
+                    //         ray.get_point(ray_hit.time_of_impact),
+                    //         Transform::default()
+                    //             .looking_to(ray_hit.hit_normal, Vec3::Y)
+                    //             .rotation,
+                    //     ),
+                    //     0.125,
+                    //     Color::WHITE,
+                    // );
 
-                    gizmos.cube(
-                        Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
-                        Color::WHITE,
-                    );
+                    // gizmos.cube(
+                    //     Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
+                    //     Color::WHITE,
+                    // );
 
                     if mouse_input.pressed(MouseButton::Left) {
                         commands

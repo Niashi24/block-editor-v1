@@ -2,3 +2,4 @@
 - [ ] Rework to picking (ACTIVE)
 - [ ] UI Layout
 - [ ] Tileset Editor
+- [ ] Different terrain shapes

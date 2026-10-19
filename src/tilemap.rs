@@ -32,7 +32,7 @@ use parry3d::{
 use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
-use crate::{Tile3d, TileKind};
+use crate::{Tile3d, TileKind, observe_draw_hit_gizmos};
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -160,13 +160,15 @@ impl Tilemap {
                     tile_kind: TileKind::Cube,
                 });
             } else {
-                world.spawn((
-                    Tile3d {
-                        position: pos,
-                        tile_kind: TileKind::Cube,
-                    },
-                    ChildOf(tilemap_id),
-                ));
+                world
+                    .spawn((
+                        Tile3d {
+                            position: pos,
+                            tile_kind: TileKind::Cube,
+                        },
+                        ChildOf(tilemap_id),
+                    ))
+                    .observe(observe_draw_hit_gizmos);
             }
         }
     }
