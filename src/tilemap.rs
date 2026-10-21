@@ -24,15 +24,12 @@ use gltf_json::{
     validation::{Checked, USize64},
 };
 use parry3d::{
-    math::{Pose3, Vec3 as Vec3P, Vector},
-    partitioning::Bvh,
-    query::Ray,
-    shape::{Cuboid, Shape},
+    math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, FeatureId, Shape},
 };
 use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
-use crate::{Tile3d, TileKind, observe_draw_hit_gizmos};
+use crate::{CubeTileFace, Tile3d, TileFace, TileKind, observe_draw_hit_gizmos};
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -111,11 +108,37 @@ impl TilemapCollision {
             .cast_ray_and_get_normal(&pose, &ray_parry, f32::INFINITY, true)
             .unwrap();
 
+        let face = if shape.is::<Cuboid>() {
+            TileFace::Cube(match hit.feature {
+                FeatureId::Face(i) => {
+                    match i {
+                        3 => CubeTileFace::Right,
+                        0 => CubeTileFace::Left,
+                        4 => CubeTileFace::Top,
+                        1 => CubeTileFace::Bottom,
+                        5 => CubeTileFace::Front,
+                        2 => CubeTileFace::Back,
+                        _ => {
+                            panic!("Unknown face id: {i}");
+                        }
+                    }
+                },
+                unknown => {
+                    panic!("Unknown feature for Cuboid: {unknown:?}");
+                }
+            })
+        } else {
+            panic!("Unknown shape: {:?}", shape.as_typed_shape());
+        };
+
+        // hit.feature
+
         Some(TilemapRayHit {
             time_of_impact: hit.time_of_impact,
             hit_normal: Vec3::from_array(hit.normal.to_array()),
             tile: *pos,
             entity: Some(*entity),
+            face,
         })
     }
 }
@@ -197,6 +220,7 @@ pub struct TilemapRayHit {
     pub time_of_impact: f32,
     pub hit_normal: Vec3,
     pub tile: IVec3,
+    pub face: TileFace,
     /// If none, hit the infinite plane instead
     pub entity: Option<Entity>,
 }

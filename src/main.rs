@@ -10,20 +10,12 @@ mod tilemap;
 use std::sync::Arc;
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
-    ecs::{lifecycle::HookContext, world::DeferredWorld},
-    input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
-    log::tracing_subscriber::filter::combinator::And,
-    math::NormedVectorSpace,
-    picking::backend::{HitData, PointerHits, ray::RayMap},
-    prelude::*,
-    window::CursorOptions,
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, log::tracing_subscriber::filter::combinator::And, math::NormedVectorSpace, picking::backend::{HitData, HitDataExtra, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions,
 };
 use tiny_bail::or_continue;
 
 use crate::{
-    scene::Scene,
-    tilemap::{Tilemap, TilemapImage, TilemapRayHit, tilemap_coord_to_center},
+    TileFace::InfinitePlane, scene::Scene, tilemap::{Tilemap, TilemapImage, TilemapRayHit, tilemap_coord_to_center},
 };
 
 fn main() {
@@ -34,6 +26,7 @@ fn main() {
             // FpsOverlayPlugin {
             //     ..Default::default()
             // },
+            //
         ))
         .add_systems(Startup, setup_system)
         .add_systems(
@@ -59,7 +52,9 @@ fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Gizmos) {
         hit,
     } = event.event();
 
-    let tile = *hit.extra_as::<IVec3>().unwrap();
+    let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
+
+    dbg!(tile_hit);
 
     gizmos.circle(
         Isometry3d::new(
@@ -73,9 +68,67 @@ fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Gizmos) {
     );
 
     gizmos.cube(
-        Transform::from_translation(tilemap_coord_to_center(tile)),
+        Transform::from_translation(tilemap_coord_to_center(tile_hit.tile)),
+        Color::linear_rgb(1.0, 0.0, 0.0)
+    );
+
+    gizmos.cube(
+        Transform::from_translation(tilemap_coord_to_center(tile_hit.tile + tile_hit.face.new_tile_offset())),
         Color::WHITE,
     );
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TileFace {
+    Cube(CubeTileFace),
+    // TODO: Replace with better plane normal
+    InfinitePlane(IVec3),
+    // Slope
+    // Corner
+}
+
+impl TileFace {
+    pub fn new_tile_offset(&self) -> IVec3 {
+        match self {
+            Self::Cube(cube) => cube.new_tile_offset(),
+            Self::InfinitePlane(normal) => *normal,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum CubeTileFace {
+    Top,
+    Bottom,
+    Left,
+    Right,
+    Front,
+    Back,
+}
+
+impl CubeTileFace {
+    pub fn new_tile_offset(&self) -> IVec3 {
+        match self {
+            CubeTileFace::Top => IVec3::Y,
+            CubeTileFace::Bottom => IVec3::NEG_Y,
+            CubeTileFace::Left => IVec3::NEG_X,
+            CubeTileFace::Right => IVec3::X,
+            CubeTileFace::Front => IVec3::Z,
+            CubeTileFace::Back => IVec3::NEG_Z,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct TileHitData {
+    pub tile: IVec3,
+    pub face: TileFace,
+}
+
+impl From<TileHitData> for Option<Arc<dyn HitDataExtra>> {
+    fn from(value: TileHitData) -> Self {
+        Some(Arc::new(value))
+    }
 }
 
 fn update_hits(
@@ -102,13 +155,16 @@ fn update_hits(
                             depth: hit.time_of_impact,
                             position: Some(ray.get_point(hit.time_of_impact)),
                             normal: Some(hit.hit_normal),
-                            extra: Some(std::sync::Arc::new(hit.tile)),
+                            extra: TileHitData {
+                                tile: hit.tile,
+                                face: hit.face,
+                            }.into(),
                         },
                     ))
                 } else {
                     ray.intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y })
                         .map(|time_of_impact| {
-                            let tile = (ray.get_point(time_of_impact) + Dir3::Y * 0.01)
+                            let tile = (ray.get_point(time_of_impact) - Dir3::Y * 0.01)
                                 .floor()
                                 .as_ivec3();
                             (
@@ -118,7 +174,10 @@ fn update_hits(
                                     depth: time_of_impact,
                                     position: Some(ray.get_point(time_of_impact)),
                                     normal: Some(Vec3::Y),
-                                    extra: Some(std::sync::Arc::new(tile)),
+                                    extra: TileHitData {
+                                        tile,
+                                        face: TileFace::InfinitePlane(IVec3::Y),
+                                    }.into(),
                                 },
                             )
                         })
@@ -127,7 +186,7 @@ fn update_hits(
             Some(&(origin, normal)) => {
                 ray.intersect_plane(origin, InfinitePlane3d { normal })
                     .map(|time_of_impact| {
-                        let point = ray.get_point(time_of_impact) + normal * 0.01;
+                        let point = ray.get_point(time_of_impact) - normal * 0.01;
 
                         let tile = point.floor().as_ivec3();
                         (
@@ -137,7 +196,10 @@ fn update_hits(
                                 depth: time_of_impact,
                                 position: Some(ray.get_point(time_of_impact)),
                                 normal: Some(normal.as_vec3()),
-                                extra: Some(Arc::new(tile)),
+                                extra: TileHitData {
+                                    tile,
+                                    face: InfinitePlane(normal.as_ivec3()),
+                                }.into(),
                             },
                         )
                     })
@@ -534,6 +596,7 @@ fn place_system(
                             hit_normal: Vec3::Y,
                             tile,
                             entity: None,
+                            face: TileFace::InfinitePlane(IVec3::Y),
                         }
                     }
                 };
@@ -582,6 +645,7 @@ fn place_system(
                             hit_normal: Vec3::Y,
                             tile,
                             entity: None,
+                            face: TileFace::InfinitePlane(normal.as_ivec3())
                         }
                     };
 
