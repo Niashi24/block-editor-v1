@@ -29,7 +29,7 @@ use parry3d::{
 use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
-use crate::{CubeTileFace, Tile3d, TileFace, TileKind, observe_draw_hit_gizmos};
+use crate::{CubeTileFace, Tile3d, TileFace, TileKind, observe_draw_hit_gizmos, on_press_add_remove};
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -191,7 +191,8 @@ impl Tilemap {
                         },
                         ChildOf(tilemap_id),
                     ))
-                    .observe(observe_draw_hit_gizmos);
+                    .observe(observe_draw_hit_gizmos)
+                    .observe(on_press_add_remove);
             }
         }
     }

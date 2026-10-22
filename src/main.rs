@@ -10,7 +10,7 @@ mod tilemap;
 use std::sync::Arc;
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, log::tracing_subscriber::filter::combinator::And, math::NormedVectorSpace, picking::backend::{HitData, HitDataExtra, PointerHits, ray::RayMap}, prelude::*, window::CursorOptions,
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, log::tracing_subscriber::filter::combinator::And, math::NormedVectorSpace, picking::backend::{HitData, HitDataExtra, PointerHits, ray::{RayId, RayMap}}, prelude::*, window::CursorOptions,
 };
 use tiny_bail::or_continue;
 
@@ -33,18 +33,19 @@ fn main() {
             Update,
             (
                 move_system,
-                place_system,
+                // place_system,
                 update_grid,
-                load_tilemap,
+                keyboard_funcs,
                 regenerate_dirty_tilemaps,
                 update_hits,
+                draw_selection_gizmos
             ),
         )
         .init_resource::<MeshData>()
         .run();
 }
 
-fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Gizmos) {
+fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Query<&mut SelectionGizmos>) {
     let PointerMove {
         entity: _,
         pointer: _,
@@ -54,28 +55,48 @@ fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Gizmos) {
 
     let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
 
-    dbg!(tile_hit);
+    let mut gizmos = gizmos.get_mut(hit.camera).unwrap();
 
-    gizmos.circle(
-        Isometry3d::new(
+    *gizmos = SelectionGizmos {
+        circle_iso: Isometry3d::new(
             hit.position.unwrap(),
             Transform::default()
                 .looking_to(hit.normal.unwrap(), Vec3::Y)
                 .rotation,
         ),
-        0.125,
-        Color::WHITE,
-    );
+        tile_pos: tile_hit.tile,
+        new_tile_pos: tile_hit.tile + tile_hit.face.new_tile_offset(),
+    };
+}
 
-    gizmos.cube(
-        Transform::from_translation(tilemap_coord_to_center(tile_hit.tile)),
-        Color::linear_rgb(1.0, 0.0, 0.0)
-    );
+#[derive(Debug, Component, Default)]
+struct SelectionGizmos {
+    circle_iso: Isometry3d,
+    tile_pos: IVec3,
+    new_tile_pos: IVec3,
+}
 
-    gizmos.cube(
-        Transform::from_translation(tilemap_coord_to_center(tile_hit.tile + tile_hit.face.new_tile_offset())),
-        Color::WHITE,
-    );
+fn draw_selection_gizmos(
+    mut gizmos: Gizmos,
+    selection_gizmos: Query<&SelectionGizmos>,
+) {
+    for selection in selection_gizmos.iter() {
+        gizmos.circle(
+            selection.circle_iso,
+            0.125,
+            Color::WHITE,
+        );
+
+        gizmos.cube(
+            Transform::from_translation(tilemap_coord_to_center(selection.tile_pos)),
+            Color::linear_rgb(1.0, 0.0, 0.0)
+        );
+
+        gizmos.cube(
+            Transform::from_translation(tilemap_coord_to_center(selection.new_tile_pos)),
+            Color::WHITE,
+        );
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -92,6 +113,26 @@ impl TileFace {
         match self {
             Self::Cube(cube) => cube.new_tile_offset(),
             Self::InfinitePlane(normal) => *normal,
+        }
+    }
+
+    fn active_plane(&self, tile: IVec3) -> ActivePlane {
+        match *self {
+            TileFace::Cube(cube_tile_face) => {
+                let normal = cube_tile_face.new_tile_offset();
+                let depth = tile.dot(normal) + 1;
+                ActivePlane {
+                    depth,
+                    normal,
+                }
+            },
+            InfinitePlane(normal) => {
+                let depth = tile.dot(normal) + 1;
+                ActivePlane {
+                    depth,
+                    normal,
+                }
+            },
         }
     }
 }
@@ -124,6 +165,11 @@ pub struct TileHitData {
     pub tile: IVec3,
     pub face: TileFace,
 }
+impl TileHitData {
+    fn active_plane(&self) -> ActivePlane {
+        self.face.active_plane(self.tile)
+    }
+}
 
 impl From<TileHitData> for Option<Arc<dyn HitDataExtra>> {
     fn from(value: TileHitData) -> Self {
@@ -134,17 +180,17 @@ impl From<TileHitData> for Option<Arc<dyn HitDataExtra>> {
 fn update_hits(
     ray_map: Res<RayMap>,
     mut output_messages: MessageWriter<PointerHits>,
-    mut camera: Query<(&Camera, &mut SelectionState)>,
+    camera: Query<(&Camera, &mut SelectionState)>,
     tilemap: Single<(Entity, &Tilemap)>,
     grid: Single<Entity, (With<InfiniteGrid>, Without<ActiveGrid>)>,
     active_grid: Single<Entity, (With<InfiniteGrid>, With<ActiveGrid>)>,
 ) {
-    let (tilemap_entity, tilemap) = tilemap.into_inner();
+    let (_tilemap_entity, tilemap) = tilemap.into_inner();
     for (&ray_id, &ray) in ray_map.iter() {
         let (camera, selection_state) = or_continue!(camera.get(ray_id.camera));
 
-        let pick = match selection_state.active_plane.as_ref() {
-            None => {
+        let pick = match &*selection_state {
+            SelectionState::None => {
                 if let Some(hit) = tilemap.ray_intersection(ray)
                     && let Some(e) = hit.entity
                 {
@@ -183,26 +229,9 @@ fn update_hits(
                         })
                 }
             }
-            Some(&(origin, normal)) => {
-                ray.intersect_plane(origin, InfinitePlane3d { normal })
-                    .map(|time_of_impact| {
-                        let point = ray.get_point(time_of_impact) - normal * 0.01;
-
-                        let tile = point.floor().as_ivec3();
-                        (
-                            *active_grid,
-                            HitData {
-                                camera: ray_id.camera,
-                                depth: time_of_impact,
-                                position: Some(ray.get_point(time_of_impact)),
-                                normal: Some(normal.as_vec3()),
-                                extra: TileHitData {
-                                    tile,
-                                    face: InfinitePlane(normal.as_ivec3()),
-                                }.into(),
-                            },
-                        )
-                    })
+            SelectionState::Adding(active_plane) | SelectionState::Removing(active_plane) => {
+                active_plane.ray_intersection(ray, ray_id)
+                    .map(|hit| (*active_grid, hit))
             }
         };
 
@@ -214,7 +243,7 @@ fn update_hits(
     }
 }
 
-fn load_tilemap(
+fn keyboard_funcs(
     mut tilemap_entity: Single<(Entity, &mut Tilemap)>,
     mut camera_entity: Single<&mut Transform, With<Camera>>,
     _mesh_assets: ResMut<Assets<Mesh>>,
@@ -276,27 +305,43 @@ fn load_tilemap(
             eprintln!("{}", err.backtrace());
         }
     }
+
+    if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyE) {
+        tilemap_entity.1.data.export();
+    }
 }
 
-#[derive(Component, Default)]
-struct SelectionState {
-    active_plane: Option<(Vec3, Dir3)>,
-}
-
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 struct ActivePlane {
     pub depth: i32,
     pub normal: IVec3,
 }
 
 impl ActivePlane {
-    pub fn ray_intersection(&self, ray: Ray3d) -> Option<IVec3> {
-        todo!()
+    pub fn ray_intersection(&self, ray: Ray3d, ray_id: RayId) -> Option<HitData> {
+        let origin = self.depth * self.normal;
+
+        ray.intersect_plane(origin.as_vec3(), InfinitePlane3d { normal: Dir3::new(self.normal.as_vec3()).unwrap() })
+            .map(|time_of_impact| {
+                let point = ray.get_point(time_of_impact) - self.normal.as_vec3() * 0.01;
+
+                let tile = point.floor().as_ivec3();
+                HitData {
+                    camera: ray_id.camera,
+                    depth: time_of_impact,
+                    position: Some(ray.get_point(time_of_impact)),
+                    normal: Some(self.normal.as_vec3()),
+                    extra: TileHitData {
+                        tile,
+                        face: InfinitePlane(self.normal),
+                    }.into(),
+                }
+            })
     }
 }
 
 #[derive(Component, Default, Debug)]
-enum SelectionState2 {
+enum SelectionState {
     #[default]
     None,
     Adding(ActivePlane),
@@ -306,6 +351,92 @@ enum SelectionState2 {
 #[derive(Component)]
 struct ActiveGrid;
 
+fn on_drag_add_remove_tile(
+    e: On<PointerMove>,
+    tilemap: Single<(Entity, &Tilemap)>,
+    selection_state: Query<&mut SelectionState>,
+    mut commands: Commands,
+) {
+    let PointerMove { entity: _, pointer: _, hit, delta: _ } = &*e;
+
+    let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
+    let (tilemap_entity, _tilemap) = tilemap.into_inner();
+
+    let selection_state = selection_state.get(hit.camera).unwrap();
+
+    match selection_state {
+        SelectionState::None => {},
+        SelectionState::Adding(_) => {
+            let new_tile = tile_hit.tile + tile_hit.face.new_tile_offset();
+
+            commands
+                .entity(tilemap_entity)
+                .queue(Tilemap::add_cube(new_tile));
+        },
+        SelectionState::Removing(_) => {
+            commands
+                .entity(tilemap_entity)
+                .queue(Tilemap::remove_at(tile_hit.tile));
+        },
+    }
+}
+
+fn on_press_add_remove(
+    e: On<PointerPress>,
+    tilemap: Single<(Entity, &Tilemap)>,
+    mut commands: Commands,
+    mut selection_state: Query<&mut SelectionState>,
+) {
+    let PointerPress { entity: _, pointer: _, button, hit, count: _ } = &*e;
+
+    let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
+    let (tilemap_entity, _tilemap) = tilemap.into_inner();
+
+    let mut selection_state = selection_state.get_mut(hit.camera).unwrap();
+
+    let active_plane = tile_hit.active_plane();
+
+    match button {
+        PointerButton::Primary => {
+            let new_tile = tile_hit.tile + tile_hit.face.new_tile_offset();
+            commands
+                .entity(tilemap_entity)
+                .queue(Tilemap::add_cube(new_tile));
+
+            *selection_state = SelectionState::Adding(active_plane);
+
+            info!("Adding new tile and transition to Add: {:?}", active_plane);
+        },
+        PointerButton::Secondary => {
+            commands
+                .entity(tilemap_entity)
+                .queue(Tilemap::remove_at(tile_hit.tile));
+
+            *selection_state = SelectionState::Removing(active_plane);
+
+            info!("Remove tile and transition to Remove: {:?}", active_plane);
+        },
+        PointerButton::Middle => {},
+    }
+}
+
+fn grid_on_release(
+    e: On<PointerRelease>,
+    mut selection_state: Query<&mut SelectionState>,
+) {
+    let PointerRelease { entity: _, pointer: _, button: _, hit } = &*e;
+
+    let mut selection_state = selection_state.get_mut(hit.camera).unwrap();
+
+    match selection_state.as_mut() {
+        SelectionState::None => { return; },
+        SelectionState::Adding(_) | SelectionState::Removing(_) => {},
+    }
+
+    println!("Released mouse and going to None state");
+    *selection_state = SelectionState::None;
+}
+
 fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>) {
     commands
         .spawn((
@@ -314,7 +445,9 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
             // Optional component you can use to configure the grid
             InfiniteGridSettings::default(),
         ))
-        .observe(observe_draw_hit_gizmos);
+        .observe(observe_draw_hit_gizmos)
+        .observe(on_press_add_remove)
+        .observe(grid_on_release);
 
     commands
         .spawn((
@@ -327,7 +460,9 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
             },
             Visibility::Hidden,
         ))
-        .observe(observe_draw_hit_gizmos);
+        .observe(observe_draw_hit_gizmos)
+        .observe(on_drag_add_remove_tile)
+        .observe(grid_on_release);
 
     commands.spawn((
         Tilemap::default(),
@@ -339,6 +474,7 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
     commands.spawn((
         Camera3d::default(),
         SelectionState::default(),
+        SelectionGizmos::default(),
         // CameraMovement {
         //     translation: camera_transform.translation,
         //     rotation: camera_transform.rotation,
@@ -544,179 +680,24 @@ fn update_grid(
     mut active_grid: Single<(&mut Transform, &mut Visibility), With<ActiveGrid>>,
     selection_state: Single<&SelectionState>,
 ) {
-    match selection_state.active_plane.as_ref() {
+    let active_plane = match &*selection_state {
+        SelectionState::None => None,
+        SelectionState::Adding(active_plane) => Some(*active_plane),
+        SelectionState::Removing(active_plane) => Some(*active_plane),
+    };
+
+    match active_plane {
         None => {
             *active_grid.1 = Visibility::Hidden;
-            // *active_grid.0 = Transform::from_translation(Vec3::Y * -100000.0);
         }
-        Some(&(origin, normal)) => {
+        Some(ActivePlane { depth, normal }) => {
             *active_grid.1 = Visibility::Inherited;
             *active_grid.0 =
-                Transform::from_translation(origin.floor()).looking_to(Vec3::Y, normal);
+                Transform::from_translation((depth * normal).as_vec3()).looking_to(Vec3::Y, normal.as_vec3());
             if (Vec3::Y - normal.as_vec3()).norm_squared() < 1e-3 {
                 active_grid.0.rotation = Quat::IDENTITY;
             }
         }
-    }
-}
-
-fn place_system(
-    tilemap: Single<(Entity, &Tilemap)>,
-    camera: Single<(&Camera, &GlobalTransform, &mut SelectionState)>,
-    window: Single<&Window>,
-    mouse_input: Res<ButtonInput<MouseButton>>,
-    key_input: Res<ButtonInput<KeyCode>>,
-    _mesh_data: Res<MeshData>,
-    _mesh_assets: ResMut<Assets<Mesh>>,
-    mut gizmos: Gizmos,
-    mut commands: Commands,
-) {
-    let (camera, transform, mut selection_state) = camera.into_inner();
-    let (tilemap_entity, tilemap) = tilemap.into_inner();
-
-    if let Some(cursor_position) = window.cursor_position() {
-        let ray = camera
-            .viewport_to_world(transform, cursor_position)
-            .unwrap();
-
-        match selection_state.active_plane.as_ref() {
-            None => {
-                let ray_hit = {
-                    if let Some(hit) = tilemap.ray_intersection(ray) {
-                        hit
-                    } else {
-                        let time_of_impact = ray
-                            .intersect_plane(Vec3::ZERO, InfinitePlane3d { normal: Dir3::Y })
-                            .unwrap();
-                        let tile = (ray.get_point(time_of_impact) + Dir3::Y * 0.01)
-                            .floor()
-                            .as_ivec3();
-                        TilemapRayHit {
-                            time_of_impact,
-                            hit_normal: Vec3::Y,
-                            tile,
-                            entity: None,
-                            face: TileFace::InfinitePlane(IVec3::Y),
-                        }
-                    }
-                };
-
-                // gizmos.circle(
-                //     Isometry3d::new(
-                //         ray.get_point(ray_hit.time_of_impact),
-                //         Transform::default()
-                //             .looking_to(ray_hit.hit_normal, Vec3::Y)
-                //             .rotation,
-                //     ),
-                //     0.125,
-                //     Color::WHITE,
-                // );
-
-                // gizmos.cube(
-                //     Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
-                //     Color::WHITE,
-                // );
-
-                if mouse_input.any_pressed([MouseButton::Left, MouseButton::Right]) {
-                    selection_state.active_plane = Some((
-                        ray.get_point(ray_hit.time_of_impact),
-                        Dir3::new(ray_hit.hit_normal).unwrap(),
-                    ));
-                }
-            }
-            Some(&(origin, normal)) => {
-                if !mouse_input.pressed(MouseButton::Left)
-                    && !mouse_input.pressed(MouseButton::Right)
-                {
-                    selection_state.active_plane = None;
-                } else {
-                    let ray_hit = {
-                        let time_of_impact = tiny_bail::or_return!(
-                            ray.intersect_plane(origin, InfinitePlane3d { normal })
-                        );
-                        let mut point = ray.get_point(time_of_impact) + normal * 0.01;
-                        if !mouse_input.pressed(MouseButton::Left) {
-                            point -= *normal;
-                        }
-
-                        let tile = point.floor().as_ivec3();
-                        TilemapRayHit {
-                            time_of_impact,
-                            hit_normal: Vec3::Y,
-                            tile,
-                            entity: None,
-                            face: TileFace::InfinitePlane(normal.as_ivec3())
-                        }
-                    };
-
-                    // gizmos.circle(
-                    //     Isometry3d::new(
-                    //         ray.get_point(ray_hit.time_of_impact),
-                    //         Transform::default()
-                    //             .looking_to(ray_hit.hit_normal, Vec3::Y)
-                    //             .rotation,
-                    //     ),
-                    //     0.125,
-                    //     Color::WHITE,
-                    // );
-
-                    // gizmos.cube(
-                    //     Transform::from_translation(tilemap_coord_to_center(ray_hit.tile)),
-                    //     Color::WHITE,
-                    // );
-
-                    if mouse_input.pressed(MouseButton::Left) {
-                        commands
-                            .entity(tilemap_entity)
-                            .queue(Tilemap::add_cube(ray_hit.tile));
-                    } else {
-                        commands
-                            .entity(tilemap_entity)
-                            .queue(Tilemap::remove_at(ray_hit.tile));
-                    }
-                }
-            }
-        }
-    }
-
-    if key_input.pressed(KeyCode::ControlLeft) && key_input.just_pressed(KeyCode::KeyE) {
-        tilemap.data.export();
-    }
-}
-
-fn tile_3d_picking_backend(
-    ray_map: Res<RayMap>,
-    camera: Query<&Camera>,
-    tilemaps: Query<&Tilemap>,
-    mut pointer_hits: MessageWriter<PointerHits>,
-) {
-    for (&ray_id, &ray) in ray_map.iter() {
-        let Ok(camera) = camera.get(ray_id.camera) else {
-            continue;
-        };
-
-        let mut picks = Vec::new();
-
-        for tilemap in tilemaps.iter() {
-            let Some(hit) = tilemap.collision.ray_intersection(ray) else {
-                continue;
-            };
-
-            let entity = hit.entity.expect("hit plane");
-
-            picks.push((
-                entity,
-                HitData {
-                    camera: ray_id.camera,
-                    depth: hit.time_of_impact,
-                    position: Some(ray.get_point(hit.time_of_impact)),
-                    normal: Some(hit.hit_normal),
-                    extra: None,
-                },
-            ))
-        }
-
-        pointer_hits.write(PointerHits::new(ray_id.pointer, picks, camera.order as f32));
     }
 }
 
@@ -769,11 +750,4 @@ impl Tile3d {
         tilemap.data.remove_at(tile.position);
         tilemap.dirty = true;
     }
-}
-
-#[derive(Component)]
-#[component(immutable)]
-struct Tile2d {
-    tile: IVec3,
-    idx: u32,
 }

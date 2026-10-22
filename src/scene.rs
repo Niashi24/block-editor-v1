@@ -1,6 +1,7 @@
 use std::{fs::File, io::BufWriter};
 
 use bevy::math::Isometry3d;
+use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
 use snafu::{OptionExt, ResultExt, Whatever, whatever};
 
@@ -28,7 +29,8 @@ impl Scene {
         let file = File::create("assets/scenes/scene.ron").whatever_context("create file")?;
         let mut file = BufWriter::new(file);
         ron::Options::default()
-            .to_io_writer(&mut file, &self)
+            .with_default_extension(Extensions::all())
+            .to_io_writer_pretty(&mut file, &self, PrettyConfig::new())
             .with_whatever_context(|err| format!("write ron: {err}"))?;
 
         println!("Successfully saved.");
@@ -50,6 +52,7 @@ impl Scene {
         };
 
         let scene = ron::Options::default()
+            .with_default_extension(Extensions::all())
             .from_reader::<_, Scene>(file)
             .with_whatever_context(|err| format!("deserialize ron: {err}"))?;
 
