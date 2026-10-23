@@ -10,12 +10,24 @@ mod tilemap;
 use std::sync::Arc;
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, log::tracing_subscriber::filter::combinator::And, math::NormedVectorSpace, picking::backend::{HitData, HitDataExtra, PointerHits, ray::{RayId, RayMap}}, prelude::*, window::CursorOptions,
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
+    ecs::{lifecycle::HookContext, world::DeferredWorld},
+    input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
+    log::tracing_subscriber::filter::combinator::And,
+    math::NormedVectorSpace,
+    picking::backend::{
+        HitData, HitDataExtra, PointerHits,
+        ray::{RayId, RayMap},
+    },
+    prelude::*,
+    window::CursorOptions,
 };
 use tiny_bail::or_continue;
 
 use crate::{
-    TileFace::InfinitePlane, scene::Scene, tilemap::{Tilemap, TilemapImage, TilemapRayHit, tilemap_coord_to_center},
+    TileFace::InfinitePlane,
+    scene::Scene,
+    tilemap::{Tilemap, TilemapImage, TilemapRayHit, tilemap_coord_to_center},
 };
 
 fn main() {
@@ -38,7 +50,7 @@ fn main() {
                 keyboard_funcs,
                 regenerate_dirty_tilemaps,
                 update_hits,
-                draw_selection_gizmos
+                draw_selection_gizmos,
             ),
         )
         .init_resource::<MeshData>()
@@ -76,20 +88,13 @@ struct SelectionGizmos {
     new_tile_pos: IVec3,
 }
 
-fn draw_selection_gizmos(
-    mut gizmos: Gizmos,
-    selection_gizmos: Query<&SelectionGizmos>,
-) {
+fn draw_selection_gizmos(mut gizmos: Gizmos, selection_gizmos: Query<&SelectionGizmos>) {
     for selection in selection_gizmos.iter() {
-        gizmos.circle(
-            selection.circle_iso,
-            0.125,
-            Color::WHITE,
-        );
+        gizmos.circle(selection.circle_iso, 0.125, Color::WHITE);
 
         gizmos.cube(
             Transform::from_translation(tilemap_coord_to_center(selection.tile_pos)),
-            Color::linear_rgb(1.0, 0.0, 0.0)
+            Color::linear_rgb(1.0, 0.0, 0.0),
         );
 
         gizmos.cube(
@@ -121,18 +126,12 @@ impl TileFace {
             TileFace::Cube(cube_tile_face) => {
                 let normal = cube_tile_face.new_tile_offset();
                 let depth = tile.dot(normal) + 1;
-                ActivePlane {
-                    depth,
-                    normal,
-                }
-            },
+                ActivePlane { depth, normal }
+            }
             InfinitePlane(normal) => {
                 let depth = tile.dot(normal) + 1;
-                ActivePlane {
-                    depth,
-                    normal,
-                }
-            },
+                ActivePlane { depth, normal }
+            }
         }
     }
 }
@@ -204,7 +203,8 @@ fn update_hits(
                             extra: TileHitData {
                                 tile: hit.tile,
                                 face: hit.face,
-                            }.into(),
+                            }
+                            .into(),
                         },
                     ))
                 } else {
@@ -223,14 +223,16 @@ fn update_hits(
                                     extra: TileHitData {
                                         tile,
                                         face: TileFace::InfinitePlane(IVec3::Y),
-                                    }.into(),
+                                    }
+                                    .into(),
                                 },
                             )
                         })
                 }
             }
             SelectionState::Adding(active_plane) | SelectionState::Removing(active_plane) => {
-                active_plane.ray_intersection(ray, ray_id)
+                active_plane
+                    .ray_intersection(ray, ray_id)
                     .map(|hit| (*active_grid, hit))
             }
         };
@@ -321,22 +323,28 @@ impl ActivePlane {
     pub fn ray_intersection(&self, ray: Ray3d, ray_id: RayId) -> Option<HitData> {
         let origin = self.depth * self.normal;
 
-        ray.intersect_plane(origin.as_vec3(), InfinitePlane3d { normal: Dir3::new(self.normal.as_vec3()).unwrap() })
-            .map(|time_of_impact| {
-                let point = ray.get_point(time_of_impact) - self.normal.as_vec3() * 0.01;
+        ray.intersect_plane(
+            origin.as_vec3(),
+            InfinitePlane3d {
+                normal: Dir3::new(self.normal.as_vec3()).unwrap(),
+            },
+        )
+        .map(|time_of_impact| {
+            let point = ray.get_point(time_of_impact) - self.normal.as_vec3() * 0.01;
 
-                let tile = point.floor().as_ivec3();
-                HitData {
-                    camera: ray_id.camera,
-                    depth: time_of_impact,
-                    position: Some(ray.get_point(time_of_impact)),
-                    normal: Some(self.normal.as_vec3()),
-                    extra: TileHitData {
-                        tile,
-                        face: InfinitePlane(self.normal),
-                    }.into(),
+            let tile = point.floor().as_ivec3();
+            HitData {
+                camera: ray_id.camera,
+                depth: time_of_impact,
+                position: Some(ray.get_point(time_of_impact)),
+                normal: Some(self.normal.as_vec3()),
+                extra: TileHitData {
+                    tile,
+                    face: InfinitePlane(self.normal),
                 }
-            })
+                .into(),
+            }
+        })
     }
 }
 
@@ -357,7 +365,12 @@ fn on_drag_add_remove_tile(
     selection_state: Query<&mut SelectionState>,
     mut commands: Commands,
 ) {
-    let PointerMove { entity: _, pointer: _, hit, delta: _ } = &*e;
+    let PointerMove {
+        entity: _,
+        pointer: _,
+        hit,
+        delta: _,
+    } = &*e;
 
     let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
     let (tilemap_entity, _tilemap) = tilemap.into_inner();
@@ -365,19 +378,19 @@ fn on_drag_add_remove_tile(
     let selection_state = selection_state.get(hit.camera).unwrap();
 
     match selection_state {
-        SelectionState::None => {},
+        SelectionState::None => {}
         SelectionState::Adding(_) => {
             let new_tile = tile_hit.tile + tile_hit.face.new_tile_offset();
 
             commands
                 .entity(tilemap_entity)
                 .queue(Tilemap::add_cube(new_tile));
-        },
+        }
         SelectionState::Removing(_) => {
             commands
                 .entity(tilemap_entity)
                 .queue(Tilemap::remove_at(tile_hit.tile));
-        },
+        }
     }
 }
 
@@ -387,7 +400,13 @@ fn on_press_add_remove(
     mut commands: Commands,
     mut selection_state: Query<&mut SelectionState>,
 ) {
-    let PointerPress { entity: _, pointer: _, button, hit, count: _ } = &*e;
+    let PointerPress {
+        entity: _,
+        pointer: _,
+        button,
+        hit,
+        count: _,
+    } = &*e;
 
     let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
     let (tilemap_entity, _tilemap) = tilemap.into_inner();
@@ -406,7 +425,7 @@ fn on_press_add_remove(
             *selection_state = SelectionState::Adding(active_plane);
 
             info!("Adding new tile and transition to Add: {:?}", active_plane);
-        },
+        }
         PointerButton::Secondary => {
             commands
                 .entity(tilemap_entity)
@@ -415,22 +434,26 @@ fn on_press_add_remove(
             *selection_state = SelectionState::Removing(active_plane);
 
             info!("Remove tile and transition to Remove: {:?}", active_plane);
-        },
-        PointerButton::Middle => {},
+        }
+        PointerButton::Middle => {}
     }
 }
 
-fn grid_on_release(
-    e: On<PointerRelease>,
-    mut selection_state: Query<&mut SelectionState>,
-) {
-    let PointerRelease { entity: _, pointer: _, button: _, hit } = &*e;
+fn grid_on_release(e: On<PointerRelease>, mut selection_state: Query<&mut SelectionState>) {
+    let PointerRelease {
+        entity: _,
+        pointer: _,
+        button: _,
+        hit,
+    } = &*e;
 
     let mut selection_state = selection_state.get_mut(hit.camera).unwrap();
 
     match selection_state.as_mut() {
-        SelectionState::None => { return; },
-        SelectionState::Adding(_) | SelectionState::Removing(_) => {},
+        SelectionState::None => {
+            return;
+        }
+        SelectionState::Adding(_) | SelectionState::Removing(_) => {}
     }
 
     println!("Released mouse and going to None state");
@@ -692,8 +715,8 @@ fn update_grid(
         }
         Some(ActivePlane { depth, normal }) => {
             *active_grid.1 = Visibility::Inherited;
-            *active_grid.0 =
-                Transform::from_translation((depth * normal).as_vec3()).looking_to(Vec3::Y, normal.as_vec3());
+            *active_grid.0 = Transform::from_translation((depth * normal).as_vec3())
+                .looking_to(Vec3::Y, normal.as_vec3());
             if (Vec3::Y - normal.as_vec3()).norm_squared() < 1e-3 {
                 active_grid.0.rotation = Quat::IDENTITY;
             }

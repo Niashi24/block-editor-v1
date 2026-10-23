@@ -24,12 +24,17 @@ use gltf_json::{
     validation::{Checked, USize64},
 };
 use parry3d::{
-    math::{Pose3, Vec3 as Vec3P, Vector}, partitioning::Bvh, query::Ray, shape::{Cuboid, FeatureId, Shape},
+    math::{Pose3, Vec3 as Vec3P, Vector},
+    partitioning::Bvh,
+    query::Ray,
+    shape::{Cuboid, FeatureId, Shape},
 };
 use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
-use crate::{CubeTileFace, Tile3d, TileFace, TileKind, observe_draw_hit_gizmos, on_press_add_remove};
+use crate::{
+    CubeTileFace, Tile3d, TileFace, TileKind, observe_draw_hit_gizmos, on_press_add_remove,
+};
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -110,17 +115,15 @@ impl TilemapCollision {
 
         let face = if shape.is::<Cuboid>() {
             TileFace::Cube(match hit.feature {
-                FeatureId::Face(i) => {
-                    match i {
-                        3 => CubeTileFace::Right,
-                        0 => CubeTileFace::Left,
-                        4 => CubeTileFace::Top,
-                        1 => CubeTileFace::Bottom,
-                        5 => CubeTileFace::Front,
-                        2 => CubeTileFace::Back,
-                        _ => {
-                            panic!("Unknown face id: {i}");
-                        }
+                FeatureId::Face(i) => match i {
+                    3 => CubeTileFace::Right,
+                    0 => CubeTileFace::Left,
+                    4 => CubeTileFace::Top,
+                    1 => CubeTileFace::Bottom,
+                    5 => CubeTileFace::Front,
+                    2 => CubeTileFace::Back,
+                    _ => {
+                        panic!("Unknown face id: {i}");
                     }
                 },
                 unknown => {
