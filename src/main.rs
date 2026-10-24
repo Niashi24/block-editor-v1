@@ -10,24 +10,16 @@ mod tilemap;
 use std::sync::Arc;
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
-    ecs::{lifecycle::HookContext, world::DeferredWorld},
-    input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
-    log::tracing_subscriber::filter::combinator::And,
-    math::NormedVectorSpace,
-    picking::backend::{
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, ecs::{lifecycle::HookContext, world::DeferredWorld}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, log::tracing_subscriber::filter::combinator::And, math::NormedVectorSpace, picking::backend::{
         HitData, HitDataExtra, PointerHits,
         ray::{RayId, RayMap},
-    },
-    prelude::*,
-    window::CursorOptions,
+    }, platform::collections::{HashMap, HashSet, hash_map::Entry}, prelude::*, window::CursorOptions,
 };
+use serde::{Deserialize, Serialize};
 use tiny_bail::or_continue;
 
 use crate::{
-    TileFace::InfinitePlane,
-    scene::Scene,
-    tilemap::{Tilemap, TilemapImage, TilemapRayHit, tilemap_coord_to_center},
+    TileFace::InfinitePlane, scene::{Redo, History, Scene, Undo}, tilemap::{TileData, TileType, Tilemap, TilemapImage, TilemapRayHit, tilemap_coord_to_center},
 };
 
 fn main() {
@@ -54,6 +46,7 @@ fn main() {
             ),
         )
         .init_resource::<MeshData>()
+        .init_resource::<History>()
         .run();
 }
 
@@ -184,17 +177,16 @@ fn update_hits(
     grid: Single<Entity, (With<InfiniteGrid>, Without<ActiveGrid>)>,
     active_grid: Single<Entity, (With<InfiniteGrid>, With<ActiveGrid>)>,
 ) {
-    let (_tilemap_entity, tilemap) = tilemap.into_inner();
+    let (tilemap_entity, tilemap) = tilemap.into_inner();
     for (&ray_id, &ray) in ray_map.iter() {
         let (camera, selection_state) = or_continue!(camera.get(ray_id.camera));
 
         let pick = match &*selection_state {
             SelectionState::None => {
                 if let Some(hit) = tilemap.ray_intersection(ray)
-                    && let Some(e) = hit.entity
                 {
                     Some((
-                        e,
+                        tilemap_entity,
                         HitData {
                             camera: ray_id.camera,
                             depth: hit.time_of_impact,
@@ -230,7 +222,7 @@ fn update_hits(
                         })
                 }
             }
-            SelectionState::Adding(active_plane) | SelectionState::Removing(active_plane) => {
+            SelectionState::Adding { active_plane, .. } | SelectionState::Removing(active_plane) => {
                 active_plane
                     .ray_intersection(ray, ray_id)
                     .map(|hit| (*active_grid, hit))
@@ -251,15 +243,14 @@ fn keyboard_funcs(
     _mesh_assets: ResMut<Assets<Mesh>>,
     asset_server: Res<AssetServer>,
     input: Res<ButtonInput<KeyCode>>,
-    tiles: Query<(Entity, &Tile3d)>,
+    // tiles: Query<(Entity, &Tile3d)>,
+    mut history: ResMut<History>,
     mut commands: Commands,
 ) {
-    if input.just_pressed(KeyCode::KeyP) {
-        println!("{} tiles", tiles.iter().count());
-    }
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyL) {
-        let mut scene = Scene::load().unwrap();
-        scene.tilemap_data.image = Some(TilemapImage {
+        let Scene { camera, history: saved_history, mut tilemap_data } = Scene::load().unwrap();
+        // let mut scene = Scene::load().unwrap();
+        tilemap_data.image = Some(TilemapImage {
             path: String::from("atlas.png"),
             image_width: 160,
             image_height: 110,
@@ -267,11 +258,9 @@ fn keyboard_funcs(
             tile_height: 11,
         });
 
-        for (e, _tile) in tiles.iter() {
-            commands.entity(e).despawn();
-        }
+        *tilemap_entity.1 = Tilemap::default();
 
-        let img = match &scene.tilemap_data.image {
+        let img = match &tilemap_data.image {
             Some(img) => asset_server.load::<Image>(&img.path),
             None => asset_server.load("PrototypeTextures/texture_08.png"),
         };
@@ -282,17 +271,18 @@ fn keyboard_funcs(
 
         tilemap_commands.insert(MeshMaterial3d(mat));
 
-        tilemap_entity.1.data.image = scene.tilemap_data.image;
+        tilemap_entity.1.data.image = tilemap_data.image;
 
-        for (tile, tile_data) in scene.tilemap_data.tiles.iter() {
+        for (tile, tile_data) in tilemap_data.tiles.into_iter() {
             match tile_data.tile_type {
                 tilemap::TileType::Cube(_) => {
-                    tilemap_commands.queue(Tilemap::add_cube(*tile));
+                    let _ = tilemap_entity.1.insert(tile, tile_data);
                 }
             }
         }
 
-        **camera_entity = Transform::from_isometry(scene.camera);
+        *history = saved_history;
+        **camera_entity = Transform::from_isometry(camera);
     }
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyS) {
         let tilemap_data = tilemap_entity.1.data.clone();
@@ -300,6 +290,7 @@ fn keyboard_funcs(
         let scene = Scene {
             tilemap_data,
             camera,
+            history: history.clone(),
         };
         let result = scene.save();
         if let Err(err) = result {
@@ -310,6 +301,14 @@ fn keyboard_funcs(
 
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyE) {
         tilemap_entity.1.data.export();
+    }
+
+    if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyZ) {
+        if !input.pressed(KeyCode::ShiftLeft) {
+            commands.entity(tilemap_entity.0).queue(History::undo());
+        } else {
+            commands.entity(tilemap_entity.0).queue(History::redo());
+        }
     }
 }
 
@@ -352,8 +351,60 @@ impl ActivePlane {
 enum SelectionState {
     #[default]
     None,
-    Adding(ActivePlane),
+    Adding {
+        active_plane: ActivePlane,
+        diff: AddingDiff,
+    },
     Removing(ActivePlane),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct AddingDiff {
+    tile: TileData,
+    added: HashSet<IVec3>,
+    inserted: HashMap<IVec3, TileData>,
+}
+
+#[typetag::serde]
+impl Undo for AddingDiff {
+    fn undo(self: Box<Self>, mut tilemap_world: EntityWorldMut) -> Box<dyn Redo>  {
+        let tilemap = &mut *tilemap_world.get_mut::<Tilemap>().unwrap();
+
+        for &pos in self.added.iter() {
+            let _ = tilemap.remove_at(pos);
+        }
+
+        for (&pos, &tile) in self.inserted.iter() {
+            let _ = tilemap.insert(pos, tile);
+        }
+
+        self
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Undo>  {
+        Box::new(self.clone())
+    }
+}
+
+#[typetag::serde]
+impl Redo for AddingDiff {
+    fn redo(self: Box<Self>, mut tilemap_world: EntityWorldMut) -> Box<dyn Undo>  {
+        let tilemap = &mut *tilemap_world.get_mut::<Tilemap>().unwrap();
+
+        for &pos in self.added.iter() {
+            tilemap.insert(pos, self.tile);
+        }
+
+        for (&pos, _) in self.inserted.iter() {
+            tilemap.insert(pos, self.tile);
+        }
+
+        self
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Redo>  {
+        Box::new(self.clone())
+    }
 }
 
 #[derive(Component)]
@@ -361,9 +412,8 @@ struct ActiveGrid;
 
 fn on_drag_add_remove_tile(
     e: On<PointerMove>,
-    tilemap: Single<(Entity, &Tilemap)>,
-    selection_state: Query<&mut SelectionState>,
-    mut commands: Commands,
+    tilemap: Single<(Entity, &mut Tilemap)>,
+    mut selection_state: Query<&mut SelectionState>,
 ) {
     let PointerMove {
         entity: _,
@@ -373,30 +423,49 @@ fn on_drag_add_remove_tile(
     } = &*e;
 
     let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
-    let (tilemap_entity, _tilemap) = tilemap.into_inner();
+    let (tilemap_entity, mut tilemap) = tilemap.into_inner();
 
-    let selection_state = selection_state.get(hit.camera).unwrap();
+    let mut selection_state = selection_state.get_mut(hit.camera).unwrap();
 
-    match selection_state {
+    match &mut *selection_state {
         SelectionState::None => {}
-        SelectionState::Adding(_) => {
-            let new_tile = tile_hit.tile + tile_hit.face.new_tile_offset();
+        SelectionState::Adding {
+            active_plane: _,
+            diff,
+        } => {
+            let new_tile_pos = tile_hit.tile + tile_hit.face.new_tile_offset();
 
-            commands
-                .entity(tilemap_entity)
-                .queue(Tilemap::add_cube(new_tile));
+            if diff.added.contains(&new_tile_pos) { return; }
+
+            let Entry::Vacant(entry) = diff.inserted.entry(new_tile_pos) else {
+                return;
+            };
+
+            let old_tile = tilemap.insert(new_tile_pos, TileData {
+                tile_type: TileType::Cube([None; 6]),
+            });
+
+            if let Some(old_tile) = old_tile {
+                entry.insert(old_tile);
+            } else {
+                diff.added.insert(new_tile_pos);
+            }
         }
         SelectionState::Removing(_) => {
-            commands
-                .entity(tilemap_entity)
-                .queue(Tilemap::remove_at(tile_hit.tile));
+
+            tilemap.remove_at(tile_hit.tile);
+
+
+            // commands
+            //     .entity(tilemap_entity)
+            //     .queue(Tilemap::remove_at(tile_hit.tile));
         }
     }
 }
 
 fn on_press_add_remove(
     e: On<PointerPress>,
-    tilemap: Single<(Entity, &Tilemap)>,
+    tilemap: Single<(Entity, &mut Tilemap)>,
     mut commands: Commands,
     mut selection_state: Query<&mut SelectionState>,
 ) {
@@ -409,7 +478,7 @@ fn on_press_add_remove(
     } = &*e;
 
     let tile_hit = *hit.extra_as::<TileHitData>().unwrap();
-    let (tilemap_entity, _tilemap) = tilemap.into_inner();
+    let (tilemap_entity, mut tilemap) = tilemap.into_inner();
 
     let mut selection_state = selection_state.get_mut(hit.camera).unwrap();
 
@@ -418,18 +487,37 @@ fn on_press_add_remove(
     match button {
         PointerButton::Primary => {
             let new_tile = tile_hit.tile + tile_hit.face.new_tile_offset();
-            commands
-                .entity(tilemap_entity)
-                .queue(Tilemap::add_cube(new_tile));
 
-            *selection_state = SelectionState::Adding(active_plane);
+            let tile_data = TileData { tile_type: TileType::Cube([None; 6])};
+
+            let old_tile = tilemap.insert(new_tile, tile_data);
+
+            let diff = if let Some(old_tile) = old_tile {
+                AddingDiff {
+                    tile: tile_data,
+                    added: HashSet::new(),
+                    inserted: HashMap::from([(new_tile, old_tile)])
+                }
+            } else {
+                AddingDiff {
+                    tile: tile_data,
+                    added: HashSet::from([new_tile]),
+                    inserted: HashMap::new(),
+                }
+            };
+
+            *selection_state = SelectionState::Adding {
+                active_plane,
+                diff,
+            };
 
             info!("Adding new tile and transition to Add: {:?}", active_plane);
         }
         PointerButton::Secondary => {
-            commands
-                .entity(tilemap_entity)
-                .queue(Tilemap::remove_at(tile_hit.tile));
+            tilemap.remove_at(tile_hit.tile);
+            // commands
+            //     .entity(tilemap_entity)
+            //     .queue(Tilemap::remove_at(tile_hit.tile));
 
             *selection_state = SelectionState::Removing(active_plane);
 
@@ -439,7 +527,11 @@ fn on_press_add_remove(
     }
 }
 
-fn grid_on_release(e: On<PointerRelease>, mut selection_state: Query<&mut SelectionState>) {
+fn grid_on_release(
+    e: On<PointerRelease>,
+    mut selection_state: Query<&mut SelectionState>,
+    mut history: ResMut<History>,
+) {
     let PointerRelease {
         entity: _,
         pointer: _,
@@ -449,15 +541,19 @@ fn grid_on_release(e: On<PointerRelease>, mut selection_state: Query<&mut Select
 
     let mut selection_state = selection_state.get_mut(hit.camera).unwrap();
 
-    match selection_state.as_mut() {
+    let previous_state = core::mem::replace(&mut *selection_state, SelectionState::None);
+
+    match previous_state {
         SelectionState::None => {
             return;
         }
-        SelectionState::Adding(_) | SelectionState::Removing(_) => {}
+        SelectionState::Adding { active_plane: _, diff } => {
+            history.queue(Box::new(diff));
+        },
+        SelectionState::Removing { .. } => {}
     }
 
     println!("Released mouse and going to None state");
-    *selection_state = SelectionState::None;
 }
 
 fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>) {
@@ -490,7 +586,9 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
     commands.spawn((
         Tilemap::default(),
         MeshMaterial3d(mesh_data.cube_material.clone()),
-    ));
+    ))
+        .observe(observe_draw_hit_gizmos)
+        .observe(on_press_add_remove);
 
     let camera_transform = Transform::from_xyz(-12.5, 5.0, 10.0)
         .with_rotation(Quat::from_rotation_x(-45.0f32.to_radians()));
@@ -705,7 +803,7 @@ fn update_grid(
 ) {
     let active_plane = match &*selection_state {
         SelectionState::None => None,
-        SelectionState::Adding(active_plane) => Some(*active_plane),
+        SelectionState::Adding { active_plane, .. } => Some(*active_plane),
         SelectionState::Removing(active_plane) => Some(*active_plane),
     };
 
@@ -741,36 +839,36 @@ fn regenerate_dirty_tilemaps(
     }
 }
 
-#[derive(Component, Clone, Debug)]
-#[component(immutable, on_insert, on_discard)]
-pub struct Tile3d {
-    pub position: IVec3,
-    pub tile_kind: TileKind,
-}
+// #[derive(Component, Clone, Debug)]
+// #[component(immutable, on_insert, on_discard)]
+// pub struct Tile3d {
+//     pub position: IVec3,
+//     pub tile_kind: TileKind,
+// }
 
-#[derive(Clone, Debug)]
-pub enum TileKind {
-    Cube,
-}
+// #[derive(Clone, Debug)]
+// pub enum TileKind {
+//     Cube,
+// }
 
-impl Tile3d {
-    fn on_insert(mut world: DeferredWorld, hook_context: HookContext) {
-        let tile = world.get::<Tile3d>(hook_context.entity).unwrap().clone();
-        let parent = world.get::<ChildOf>(hook_context.entity).unwrap().0;
-        let mut tilemap = world.get_mut::<Tilemap>(parent).unwrap();
-        tilemap
-            .collision
-            .add_cube(tile.position, hook_context.entity);
-        tilemap.data.add_cube(tile.position);
-        tilemap.dirty = true;
-    }
+// impl Tile3d {
+//     fn on_insert(mut world: DeferredWorld, hook_context: HookContext) {
+//         let tile = world.get::<Tile3d>(hook_context.entity).unwrap().clone();
+//         let parent = world.get::<ChildOf>(hook_context.entity).unwrap().0;
+//         let mut tilemap = world.get_mut::<Tilemap>(parent).unwrap();
+//         tilemap
+//             .collision
+//             .add_cube(tile.position, hook_context.entity);
+//         tilemap.data.add_cube(tile.position);
+//         tilemap.dirty = true;
+//     }
 
-    fn on_discard(mut world: DeferredWorld, hook_context: HookContext) {
-        let tile = world.get::<Tile3d>(hook_context.entity).unwrap().clone();
-        let parent = world.get::<ChildOf>(hook_context.entity).unwrap().0;
-        let mut tilemap = world.get_mut::<Tilemap>(parent).unwrap();
-        tilemap.collision.remove_at(tile.position);
-        tilemap.data.remove_at(tile.position);
-        tilemap.dirty = true;
-    }
-}
+//     fn on_discard(mut world: DeferredWorld, hook_context: HookContext) {
+//         let tile = world.get::<Tile3d>(hook_context.entity).unwrap().clone();
+//         let parent = world.get::<ChildOf>(hook_context.entity).unwrap().0;
+//         let mut tilemap = world.get_mut::<Tilemap>(parent).unwrap();
+//         tilemap.collision.remove_at(tile.position);
+//         tilemap.data.remove_at(tile.position);
+//         tilemap.dirty = true;
+//     }
+// }

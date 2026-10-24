@@ -10,12 +10,11 @@ gltf-json = { version = "1.4.1", features = ["KHR_texture_transform"] }
 wgpu-types = { version = "30.0", default-features = false }
 snafu = "0.9.0"
 serde = { version = "1.0.228", features = ["serde_derive"] }
-sscanf = "0.5.0"
 parry3d = "0.26.1"
-serde_repr = "0.1.20"
 ron = "0.12.1"
 iddqd = "0.4.2"
 tiny_bail = "0.7.0"
+typetag = "0.2.23"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

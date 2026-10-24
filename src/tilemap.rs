@@ -33,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
 use crate::{
-    CubeTileFace, Tile3d, TileFace, TileKind, observe_draw_hit_gizmos, on_press_add_remove,
+    CubeTileFace, TileFace, observe_draw_hit_gizmos, on_press_add_remove,
 };
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
@@ -48,7 +48,7 @@ pub fn tilemap_coord_to_pose(coord: IVec3) -> Pose3 {
 pub struct TilemapCollision {
     bvh: Bvh,
     tile_to_node: HashMap<IVec3, u32>,
-    node_to_shape: HashMap<u32, (Box<dyn Shape>, IVec3, Entity)>,
+    node_to_shape: HashMap<u32, (Box<dyn Shape>, IVec3)>,
     node_idx: u32,
 }
 
@@ -69,18 +69,24 @@ pub struct TilemapCollision {
 // }
 
 impl TilemapCollision {
-    pub fn add_cube(&mut self, pos: IVec3, entity: Entity) {
+
+    pub fn add(&mut self, pos: IVec3, tile: &TileData) {
         self.remove_at(pos);
-        let transform = tilemap_coord_to_pose(pos);
 
-        let cube = Cuboid::new(Vector::splat(0.5));
-        let aabb = cube.aabb(&transform);
+        match tile.tile_type {
+            TileType::Cube(_) => {
+                let transform = tilemap_coord_to_pose(pos);
 
-        self.bvh.insert(aabb, self.node_idx);
-        self.tile_to_node.insert(pos, self.node_idx);
-        self.node_to_shape
-            .insert(self.node_idx, (Box::new(cube), pos, entity));
-        self.node_idx += 1;
+                let cube = Cuboid::new(Vector::splat(0.5));
+                let aabb = cube.aabb(&transform);
+
+                self.bvh.insert(aabb, self.node_idx);
+                self.tile_to_node.insert(pos, self.node_idx);
+                self.node_to_shape
+                    .insert(self.node_idx, (Box::new(cube), pos));
+                self.node_idx += 1;
+            }
+        }
     }
 
     pub fn remove_at(&mut self, pos: IVec3) {
@@ -102,12 +108,12 @@ impl TilemapCollision {
         let (node, _hit_time) =
             self.bvh
                 .cast_ray(&ray_parry, f32::INFINITY, |node, best_hit| {
-                    let (shape, pos, _entity) = &self.node_to_shape[&node];
+                    let (shape, pos) = &self.node_to_shape[&node];
                     let pose = tilemap_coord_to_pose(*pos);
                     shape.cast_ray(&pose, &ray_parry, best_hit, true)
                 })?;
 
-        let (shape, pos, entity) = &self.node_to_shape[&node];
+        let (shape, pos) = &self.node_to_shape[&node];
         let pose = tilemap_coord_to_pose(*pos);
         let hit = shape
             .cast_ray_and_get_normal(&pose, &ray_parry, f32::INFINITY, true)
@@ -140,7 +146,6 @@ impl TilemapCollision {
             time_of_impact: hit.time_of_impact,
             hit_normal: Vec3::from_array(hit.normal.to_array()),
             tile: *pos,
-            entity: Some(*entity),
             face,
         })
     }
@@ -155,10 +160,6 @@ pub struct Tilemap {
 }
 
 impl Tilemap {
-    pub fn get_entity(&self, pos: IVec3) -> Option<Entity> {
-        let id = self.collision.tile_to_node.get(&pos)?;
-        Some(self.collision.node_to_shape.get(id).unwrap().2)
-    }
 
     // pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
     //     self.data.add_cube(tilemap_entity, pos, commands, mesh_assets);
@@ -174,40 +175,46 @@ impl Tilemap {
         self.collision.ray_intersection(ray)
     }
 
-    pub fn add_cube(pos: IVec3) -> impl EntityCommand {
-        move |world: EntityWorldMut| {
-            let tile_entity = world.get::<Tilemap>().unwrap().get_entity(pos);
+    // pub fn add_cube(pos: IVec3) -> impl EntityCommand {
+    //     move |world: EntityWorldMut| {
+    //         let tile_entity = world.get::<Tilemap>().unwrap().get_entity(pos);
 
-            let tilemap_id = world.id();
-            let world = world.into_world_mut();
-            if let Some(tile_entity) = tile_entity {
-                world.entity_mut(tile_entity).insert(Tile3d {
-                    position: pos,
-                    tile_kind: TileKind::Cube,
-                });
-            } else {
-                world
-                    .spawn((
-                        Tile3d {
-                            position: pos,
-                            tile_kind: TileKind::Cube,
-                        },
-                        ChildOf(tilemap_id),
-                    ))
-                    .observe(observe_draw_hit_gizmos)
-                    .observe(on_press_add_remove);
-            }
-        }
+    //         let tilemap_id = world.id();
+    //         let world = world.into_world_mut();
+    //         if let Some(tile_entity) = tile_entity {
+    //             world.entity_mut(tile_entity).insert(Tile3d {
+    //                 position: pos,
+    //                 tile_kind: TileKind::Cube,
+    //             });
+    //         } else {
+    //             world
+    //                 .spawn((
+    //                     Tile3d {
+    //                         position: pos,
+    //                         tile_kind: TileKind::Cube,
+    //                     },
+    //                     ChildOf(tilemap_id),
+    //                 ))
+    //                 .observe(observe_draw_hit_gizmos)
+    //                 .observe(on_press_add_remove);
+    //         }
+    //     }
+    // }
+    //
+
+    /// Insert and return old value if present
+    pub fn insert(&mut self, pos: IVec3, tile: TileData) -> Option<TileData> {
+        self.dirty = true;
+        self.collision.add(pos, &tile);
+
+        self.data.insert(pos, tile)
     }
 
-    pub fn remove_at(pos: IVec3) -> impl EntityCommand {
-        move |world: EntityWorldMut| {
-            let tile_entity = world.get::<Tilemap>().unwrap().get_entity(pos);
+    pub fn remove_at(&mut self, pos: IVec3) -> Option<TileData> {
+        self.dirty = true;
+        self.collision.remove_at(pos);
 
-            if let Some(tile_entity) = tile_entity {
-                world.into_world_mut().despawn(tile_entity);
-            }
-        }
+        self.data.remove_at(pos)
     }
 
     fn regenerate_mesh(mut world: EntityWorldMut) {
@@ -218,6 +225,36 @@ impl Tilemap {
 
         world.insert((Mesh3d(mesh),));
     }
+
+    // pub(crate) fn add(pos: IVec3, tile: TileData) -> impl EntityCommand {
+    //     move |world: EntityWorldMut| {
+    //         let tile_entity = world.get::<Tilemap>().unwrap().get_entity(pos);
+
+    //         match tile.tile_type {
+    //             TileType::Cube(_) => {},
+    //         }
+
+    //         let tilemap_id = world.id();
+    //         let world = world.into_world_mut();
+    //         if let Some(tile_entity) = tile_entity {
+    //             world.entity_mut(tile_entity).insert(Tile3d {
+    //                 position: pos,
+    //                 tile_kind: TileKind::Cube,
+    //             });
+    //         } else {
+    //             world
+    //                 .spawn((
+    //                     Tile3d {
+    //                         position: pos,
+    //                         tile_kind: TileKind::Cube,
+    //                     },
+    //                     ChildOf(tilemap_id),
+    //                 ))
+    //                 .observe(observe_draw_hit_gizmos)
+    //                 .observe(on_press_add_remove);
+    //         }
+    //     }
+    // }
 }
 
 pub struct TilemapRayHit {
@@ -225,8 +262,6 @@ pub struct TilemapRayHit {
     pub hit_normal: Vec3,
     pub tile: IVec3,
     pub face: TileFace,
-    /// If none, hit the infinite plane instead
-    pub entity: Option<Entity>,
 }
 
 #[derive(Clone, Default, Serialize, Deserialize)]
@@ -236,25 +271,16 @@ pub struct TilemapData {
 }
 
 impl TilemapData {
-    pub fn add_cube(&mut self, pos: IVec3) {
-        if self.tiles.contains_key(&pos) {
-            return;
-        }
-
-        self.tiles.insert(
-            pos,
-            TileData {
-                tile_type: TileType::default_cube(),
-            },
-        );
+    pub fn insert(&mut self, pos: IVec3, tile: TileData) -> Option<TileData> {
+        self.tiles.insert(pos, tile)
     }
 
     pub fn get(&self, pos: IVec3) -> Option<&TileData> {
         self.tiles.get(&pos)
     }
 
-    pub fn remove_at(&mut self, pos: IVec3) {
-        self.tiles.remove(&pos);
+    pub fn remove_at(&mut self, pos: IVec3) -> Option<TileData> {
+        self.tiles.remove(&pos)
     }
 
     pub fn export(&self) {
@@ -707,7 +733,7 @@ impl Dir {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
 pub struct TileData {
     pub tile_type: TileType,
 }
