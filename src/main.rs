@@ -222,7 +222,7 @@ fn update_hits(
                         })
                 }
             }
-            SelectionState::Adding { active_plane, .. } | SelectionState::Removing(active_plane) => {
+            SelectionState::Adding { active_plane, .. } | SelectionState::Removing {active_plane, .. } => {
                 active_plane
                     .ray_intersection(ray, ray_id)
                     .map(|hit| (*active_grid, hit))
@@ -355,7 +355,10 @@ enum SelectionState {
         active_plane: ActivePlane,
         diff: AddingDiff,
     },
-    Removing(ActivePlane),
+    Removing {
+        active_plane: ActivePlane,
+        diff: RemovingDiff,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -407,6 +410,45 @@ impl Redo for AddingDiff {
     }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+struct RemovingDiff(HashMap<IVec3, TileData>);
+
+#[typetag::serde]
+impl Undo for RemovingDiff {
+    fn undo(self: Box<Self>, mut tilemap_world: EntityWorldMut) -> Box<dyn Redo>  {
+        let tilemap = &mut *tilemap_world.get_mut::<Tilemap>().unwrap();
+
+        for (&pos, &tile) in self.0.iter() {
+            tilemap.insert(pos, tile);
+        }
+
+        self
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Undo>  {
+        Box::new(self.clone())
+    }
+}
+
+#[typetag::serde]
+impl Redo for RemovingDiff {
+    fn redo(self: Box<Self>, mut tilemap_world: EntityWorldMut) -> Box<dyn Undo>  {
+        let tilemap = &mut *tilemap_world.get_mut::<Tilemap>().unwrap();
+
+        for (&pos, _) in self.0.iter() {
+            tilemap.remove_at(pos);
+        }
+
+        self
+    }
+
+    fn clone_dyn(&self) -> Box<dyn Redo>  {
+        Box::new(self.clone())
+    }
+}
+
+
+
 #[derive(Component)]
 struct ActiveGrid;
 
@@ -451,14 +493,15 @@ fn on_drag_add_remove_tile(
                 diff.added.insert(new_tile_pos);
             }
         }
-        SelectionState::Removing(_) => {
+        SelectionState::Removing {
+            active_plane: _,
+            diff,
+        } => {
+            if diff.0.contains_key(&tile_hit.tile) { return; }
 
-            tilemap.remove_at(tile_hit.tile);
-
-
-            // commands
-            //     .entity(tilemap_entity)
-            //     .queue(Tilemap::remove_at(tile_hit.tile));
+            if let Some(tile) = tilemap.remove_at(tile_hit.tile) {
+                diff.0.insert(tile_hit.tile, tile);
+            }
         }
     }
 }
@@ -514,12 +557,16 @@ fn on_press_add_remove(
             info!("Adding new tile and transition to Add: {:?}", active_plane);
         }
         PointerButton::Secondary => {
-            tilemap.remove_at(tile_hit.tile);
+            let old_tile = tilemap.remove_at(tile_hit.tile)
+                .map(|tile| (tile_hit.tile, tile));
             // commands
             //     .entity(tilemap_entity)
             //     .queue(Tilemap::remove_at(tile_hit.tile));
 
-            *selection_state = SelectionState::Removing(active_plane);
+            *selection_state = SelectionState::Removing {
+                active_plane,
+                diff: RemovingDiff(old_tile.into_iter().collect()),
+            };
 
             info!("Remove tile and transition to Remove: {:?}", active_plane);
         }
@@ -550,7 +597,9 @@ fn grid_on_release(
         SelectionState::Adding { active_plane: _, diff } => {
             history.queue(Box::new(diff));
         },
-        SelectionState::Removing { .. } => {}
+        SelectionState::Removing { active_plane: _, diff } => {
+            history.queue(Box::new(diff));
+        },
     }
 
     println!("Released mouse and going to None state");
@@ -804,7 +853,7 @@ fn update_grid(
     let active_plane = match &*selection_state {
         SelectionState::None => None,
         SelectionState::Adding { active_plane, .. } => Some(*active_plane),
-        SelectionState::Removing(active_plane) => Some(*active_plane),
+        SelectionState::Removing { active_plane, .. } => Some(*active_plane),
     };
 
     match active_plane {

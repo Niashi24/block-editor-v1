@@ -62,13 +62,13 @@ impl History {
     }
 }
 
-#[typetag::serde(tag = "type")]
+#[typetag::serde]
 pub trait Redo: Send + Sync + 'static {
     fn redo(self: Box<Self>, tilemap: EntityWorldMut) -> Box<dyn Undo>;
     fn clone_dyn(&self) -> Box<dyn Redo>;
 }
 
-#[typetag::serde(tag = "type")]
+#[typetag::serde]
 pub trait Undo: Send + Sync + 'static {
     fn undo(self: Box<Self>, tilemap: EntityWorldMut) -> Box<dyn Redo>;
     fn clone_dyn(&self) -> Box<dyn Undo>;
@@ -91,7 +91,7 @@ impl Scene {
         let file = File::create("assets/scenes/scene.ron").whatever_context("create file")?;
         let mut file = BufWriter::new(file);
         ron::Options::default()
-            .with_default_extension(Extensions::all().difference(Extensions::EXPLICIT_STRUCT_NAMES))
+            // .with_default_extension(Extensions::IMPLICIT_SOME)
             .to_io_writer_pretty(&mut file, &self, PrettyConfig::new())
             .with_whatever_context(|err| format!("write ron: {err}"))?;
 
@@ -114,7 +114,7 @@ impl Scene {
         };
 
         let scene = ron::Options::default()
-            .with_default_extension(Extensions::all().difference(Extensions::EXPLICIT_STRUCT_NAMES))
+            .with_default_extension(Extensions::IMPLICIT_SOME)
             .from_reader::<_, Scene>(file)
             .with_whatever_context(|err| format!("deserialize ron: {err}"))?;
 
