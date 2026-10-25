@@ -10,16 +10,10 @@ mod tilemap;
 use std::sync::Arc;
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings},
-    input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll},
-    math::NormedVectorSpace,
-    picking::backend::{
+    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::NormedVectorSpace, picking::backend::{
         HitData, HitDataExtra, PointerHits,
         ray::{RayId, RayMap},
-    },
-    platform::collections::{HashMap, HashSet, hash_map::Entry},
-    prelude::*,
-    window::CursorOptions,
+    }, platform::collections::{HashMap, HashSet, hash_map::Entry}, prelude::*, window::{CursorIcon, CursorOptions},
 };
 use serde::{Deserialize, Serialize};
 use tiny_bail::or_continue;
@@ -45,7 +39,7 @@ fn main() {
         .add_systems(
             Update,
             (
-                move_system,
+                mouse_move_system,
                 // place_system,
                 update_grid,
                 keyboard_funcs,
@@ -565,7 +559,7 @@ fn grid_on_release(
     println!("Released mouse and going to None state");
 }
 
-fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>) {
+fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>, window: Single<Entity, With<Window>>,) {
     commands
         .spawn((
             // You need to spawn an entity with this component
@@ -632,6 +626,9 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
             0.0,
         )),
     ));
+
+    commands.entity(*window)
+        .insert(CursorIcon::default());
 }
 
 pub fn intersect_plane_full(
@@ -647,18 +644,28 @@ pub fn intersect_plane_full(
     return Some(distance);
 }
 
-fn move_system(
+// fn keyboard_move_system
+
+fn mouse_move_system(
     camera: Single<(&mut Transform, &Camera, &GlobalTransform)>,
     window: Single<&Window>,
     key_input: Res<ButtonInput<KeyCode>>,
     mouse_input: Res<ButtonInput<MouseButton>>,
     accumulated_mouse_motion: Res<AccumulatedMouseMotion>,
     accumulated_mouse_scroll: Res<AccumulatedMouseScroll>,
-    _cursor_options: Single<&mut CursorOptions>,
+    mut cursor_options: Single<&mut CursorIcon>,
     time: Res<Time>,
     _gizmos: Gizmos,
 ) {
     let (mut camera_transform, _camera, _camera_gb_transform) = camera.into_inner();
+
+    if !key_input.pressed(KeyCode::Space) {
+        // **cursor_options = CursorIcon::System(bevy::window::SystemCursorIcon::Default);
+        return;
+    }
+    // **cursor_options = CursorIcon::System(bevy::window::SystemCursorIcon::AllScroll);
+
+    // cursor_options.grab_mode = bevy::window::CursorGrabMode::None;
 
     let mut move_speed = 0.02;
     let mut rotate_speed = 2.0;
@@ -680,21 +687,21 @@ fn move_system(
         .with_y(0.0)
         .normalize_or_zero();
 
-    // let mut translation = Vec3::ZERO;
-    // if key_input.pressed(KeyCode::KeyA) {
-    //     translation -= right;
-    // }
-    // if key_input.pressed(KeyCode::KeyD) {
-    //     translation += right;
-    // }
-    // if key_input.pressed(KeyCode::KeyW) {
-    //     translation += forward;
-    // }
-    // if key_input.pressed(KeyCode::KeyS) {
-    //     translation -= forward;
-    // }
+    let mut translation = Vec3::ZERO;
+    if key_input.pressed(KeyCode::KeyA) {
+        translation -= right;
+    }
+    if key_input.pressed(KeyCode::KeyD) {
+        translation += right;
+    }
+    if key_input.pressed(KeyCode::KeyW) {
+        translation += forward;
+    }
+    if key_input.pressed(KeyCode::KeyS) {
+        translation -= forward;
+    }
 
-    // camera.translation += move_speed * time.delta_secs() * translation.normalize_or_zero();
+    camera_transform.translation += 20.0 * time.delta_secs() * translation.normalize_or_zero();
 
     // if mouse_input.pressed(MouseButton::Middle) {
     //     camera_transform.translation += 0.01 * (accumulated_mouse_motion.delta.y * forward - accumulated_mouse_motion.delta.x * right);
@@ -709,46 +716,23 @@ fn move_system(
 
     // Zoom
     {
-        let delta = accumulated_mouse_scroll.delta;
+        let mut delta = accumulated_mouse_scroll.delta;
+        if key_input.pressed(KeyCode::Equal) {
+            delta.y += 10.0 * time.delta_secs();
+        }
+        if key_input.pressed(KeyCode::Minus) {
+            delta.y -= 10.0 * time.delta_secs();
+        }
+
         let forward = camera_transform.forward();
         camera_transform.translation += forward * delta.y * scroll_speed;
         camera_transform.translation.y = camera_transform.translation.y.max(5.0);
     }
 
-    if let Some(_cursor_position) = window.cursor_position() {
-        // let previous = cursor_position - accumulated_mouse_motion.delta;
-        // let previous_point = get_world_point(previous, camera, camera_gb_transform).unwrap();
-        // let new_point = get_world_point(cursor_position, camera, camera_gb_transform).unwrap();
-
-        // gizmos.circle(
-        //     Isometry3d::new(
-        //         new_point,
-        //         Quat::from_rotation_arc(Vec3::Z, Vec3::Y),
-        //     ),
-        //     0.2,
-        //     Color::WHITE,
-        // );
-        // gizmos.circle(
-        //     Isometry3d::new(
-        //         previous_point,
-        //         Quat::from_rotation_arc(Vec3::Z, Vec3::Y),
-        //     ),
-        //     0.2,
-        //     Color::WHITE,
-        // );
-
-        // let delta = new_point - previous_point;
-
-        // dbg!(delta);
-
-        // camera_transform.translation += (delta.y * forward - delta.x * right);
-        //
-
-        if mouse_input.pressed(MouseButton::Middle) {
-            camera_transform.translation += move_speed
-                * (accumulated_mouse_motion.delta.y * forward
-                    - accumulated_mouse_motion.delta.x * right);
-        }
+    if mouse_input.pressed(MouseButton::Middle) {
+        camera_transform.translation += move_speed
+            * (accumulated_mouse_motion.delta.y * forward
+                - accumulated_mouse_motion.delta.x * right);
     }
 
     // if mouse_input.just_pressed(MouseButton::Middle) {
@@ -760,6 +744,16 @@ fn move_system(
     //     cursor_options.grab_mode = bevy::window::CursorGrabMode::None;
     // }
     // TODO: Rotate around center of screen
+
+    let mut rotation = 0.0;
+    if key_input.pressed(KeyCode::KeyQ) {
+        rotation += 90.0f32.to_radians() * time.delta_secs();
+    }
+    if key_input.pressed(KeyCode::KeyE) {
+        rotation -= 90.0f32.to_radians() * time.delta_secs();
+    }
+    camera_transform.rotate_y(rotation);
+
 
     if key_input.just_pressed(KeyCode::Numpad2) {
         camera_transform.rotation = Quat::from_rotation_x(-45.0f32.to_radians());
