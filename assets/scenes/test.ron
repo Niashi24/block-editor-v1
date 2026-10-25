@@ -47,36 +47,40 @@
             {
                 "AddingDiff": (
                     tile: (
-                        tile_type: Cube((None, None, None, None, None, None)),
+                        tile_type: Cube((Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )))),
                     ),
                     added: [
-                        (0, 0, 12),
-                        (-4, 0, 11),
-                        (-3, 0, 11),
-                        (-2, 0, 12),
-                        (-1, 0, 12),
-                        (-5, 0, 11),
-                    ],
-                    inserted: {},
-                ),
-            },
-            {
-                "AddingDiff": (
-                    tile: (
-                        tile_type: Cube((None, None, None, None, None, None)),
-                    ),
-                    added: [
-                        (2, 0, 12),
-                        (6, 0, 12),
+                        (0, 0, 13),
+                        (2, 0, 13),
                         (3, 0, 12),
-                        (6, 0, 11),
-                        (4, 0, 13),
-                        (4, 0, 12),
-                        (5, 0, 12),
-                        (4, 0, 11),
-                        (3, 0, 14),
-                        (4, 0, 14),
-                        (5, 0, 11),
+                        (-3, 0, 11),
+                        (-2, 0, 11),
+                        (-1, 0, 12),
+                        (-3, 0, 12),
+                        (-3, 0, 13),
+                        (-1, 0, 13),
+                        (1, 0, 13),
+                        (0, 0, 12),
+                        (2, 0, 12),
+                        (-4, 0, 11),
+                        (-2, 0, 12),
+                        (2, 0, 11),
+                        (3, 0, 11),
+                        (-1, 0, 11),
+                        (-2, 0, 13),
+                        (1, 0, 12),
                     ],
                     inserted: {},
                 ),
@@ -84,128 +88,24 @@
             {
                 "AddingDiff": (
                     tile: (
-                        tile_type: Cube((None, None, None, None, None, None)),
+                        tile_type: Cube((Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )), Some((
+                            tile_idx: 0,
+                        )))),
                     ),
                     added: [
-                        (-7, 0, 14),
-                        (-3, 0, 12),
-                        (-5, 0, 13),
-                        (-6, 0, 13),
-                        (-4, 0, 13),
-                        (-4, 0, 12),
-                        (-6, 0, 14),
-                        (-3, 0, 13),
-                    ],
-                    inserted: {
-                        (-3, 0, 11): (
-                            tile_type: Cube((None, None, None, None, None, None)),
-                        ),
-                    },
-                ),
-            },
-            {
-                "AddingDiff": (
-                    tile: (
-                        tile_type: Cube((None, None, None, None, None, None)),
-                    ),
-                    added: [
-                        (-10, -19, -17),
-                        (-10, 7, -4),
-                        (-10, 3, -14),
-                        (-10, -17, -14),
-                        (-10, 7, -3),
-                        (-10, -12, -24),
-                        (-10, -8, -5),
-                        (-10, -16, -13),
-                        (-10, -27, -33),
-                        (-10, -10, -20),
-                        (-10, -7, -14),
-                        (-10, 1, -19),
-                        (-10, -6, -28),
-                        (-10, 2, -8),
-                        (-10, -24, -27),
-                        (-10, -7, -13),
-                        (-10, -6, -25),
-                        (-10, -14, -10),
-                        (-10, -8, -28),
-                        (-10, 7, -7),
-                        (-10, 3, 4),
-                        (-10, -34, -69),
-                        (-10, -2, -8),
-                        (-10, -18, -15),
-                        (-10, 5, 1),
-                        (-10, 3, -3),
-                        (-10, -35, -62),
-                        (-10, -36, -69),
-                        (-10, 2, -16),
-                        (-10, 0, -22),
-                        (-10, -11, -28),
-                        (-10, -5, -11),
-                        (-10, -11, -22),
-                        (-10, 4, -1),
-                        (-10, -5, -12),
-                        (-10, -24, -41),
-                        (-10, -14, -39),
-                        (-10, 4, -2),
-                        (-10, -36, -52),
-                        (-10, -35, -65),
-                        (-10, -5, -22),
-                        (-10, -10, -18),
-                        (-10, -3, -19),
-                        (-10, -9, -43),
-                        (-10, -9, -31),
-                        (-10, 2, -10),
-                        (-10, -30, -40),
-                        (-10, 6, -1),
-                        (-10, 3, -7),
-                        (-10, -18, -31),
-                        (-10, 4, -8),
-                        (-10, -8, -15),
-                        (-10, -6, -13),
-                        (-10, 7, -10),
-                        (-10, 1, -12),
-                        (-10, -13, -9),
-                        (-10, 4, -5),
-                        (-10, -9, -17),
-                        (-10, -38, -62),
-                        (-10, 2, 7),
-                        (-10, -23, -49),
-                        (-10, 3, -5),
-                        (-10, -10, -29),
-                        (-10, 2, 5),
-                        (-10, -16, -26),
-                        (-10, -3, -33),
-                        (-10, -21, -21),
-                        (-10, -33, -58),
-                        (-10, 4, -4),
-                        (-10, -17, -53),
-                        (-10, -4, -2),
-                        (-10, -28, -65),
-                        (-10, -11, -7),
-                        (-10, 1, -5),
-                        (-10, 4, -3),
-                        (-10, -27, -47),
-                        (-10, -15, -12),
-                        (-10, -17, -28),
-                        (-10, -6, -12),
-                        (-10, 7, -8),
-                        (-10, -12, -25),
-                        (-10, -1, -30),
-                        (-10, 4, -10),
-                        (-10, -12, -8),
-                        (-10, 2, 8),
-                        (-10, -1, -15),
-                        (-10, 2, -4),
-                        (-10, 3, 2),
-                        (-10, -39, -59),
-                        (-10, 3, 1),
-                        (-10, -13, -22),
-                        (-10, 2, -18),
-                        (-10, -12, -26),
-                        (-10, -20, -19),
-                        (-10, -3, -25),
-                        (-10, 2, 9),
-                        (-10, 3, 0),
+                        (1, 0, 10),
+                        (0, 0, 11),
+                        (1, 0, 11),
                     ],
                     inserted: {},
                 ),
@@ -215,6 +115,21 @@
     ),
     tilemap_data: (
         tiles: {
+            (2, 0, 13): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
+            ),
             (-14, 1, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -290,8 +205,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (3, 0, 14): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (0, 0, 11): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-5, 1, 6): (
                 tile_type: Cube((Some((
@@ -309,10 +236,19 @@
                 )))),
             ),
             (-3, 0, 13): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -27, -33): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-10, 0, 9): (
                 tile_type: Cube((Some((
@@ -344,15 +280,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 3, -14): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -10, -20): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -24, -27): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-14, 1, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -382,9 +309,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -6, -25): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-12, 6, 7): (
                 tile_type: Cube((Some((
@@ -446,10 +370,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 3, 4): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-12, 2, 8): (
+            (-11, 1, 5): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -464,7 +385,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-11, 1, 5): (
+            (-12, 2, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -553,9 +474,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -35, -62): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (3, 0, 8): (
                 tile_type: Cube((Some((
@@ -737,9 +655,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -5, -11): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-11, 6, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -769,9 +684,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -10, -18): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-9, 0, 8): (
                 tile_type: Cube((Some((
@@ -803,12 +715,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -11, -28): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -9, -43): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-10, 0, 7): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -824,12 +730,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -11, -22): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -6, -13): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-5, 0, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -844,9 +744,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 4, -8): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-14, 0, 4): (
                 tile_type: Cube((Some((
@@ -877,9 +774,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (5, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (2, 0, 9): (
                 tile_type: Cube((Some((
@@ -986,9 +880,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-7, 0, 14): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-8, 0, 5): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -1064,8 +955,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-4, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (2, 0, 11): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-7, 1, 6): (
                 tile_type: Cube((Some((
@@ -1097,12 +1000,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -11, -7): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -27, -47): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-7, 0, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -1117,9 +1014,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (4, 0, 13): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-11, 2, 9): (
                 tile_type: Cube((Some((
@@ -1165,9 +1059,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 4, -10): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-10, 1, 5): (
                 tile_type: Cube((Some((
@@ -1229,11 +1120,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -12, -26): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -39, -59): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (1, 0, 13): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (3, 0, 6): (
                 tile_type: Cube((Some((
@@ -1295,6 +1195,21 @@
                     tile_idx: 0,
                 )))),
             ),
+            (3, 1, 8): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
+            ),
             (-10, 1, 7): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -1325,7 +1240,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (3, 1, 8): (
+            (-1, 0, 11): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -1339,9 +1254,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -13, -22): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-12, 2, 6): (
                 tile_type: Cube((Some((
@@ -1358,7 +1270,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-11, 7, 6): (
+            (2, 0, 5): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -1373,7 +1285,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (2, 0, 5): (
+            (-11, 7, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -1433,12 +1345,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 7, -4): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -12, -24): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-6, 0, 5): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -1468,12 +1374,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -7, -13): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -16, -13): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-8, 3, 8): (
                 tile_type: Cube((Some((
@@ -1520,9 +1420,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (5, 0, 11): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-6, 0, 7): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -1567,9 +1464,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 2, -8): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-11, 0, 9): (
                 tile_type: Cube((Some((
@@ -1630,12 +1524,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (4, 0, 14): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -8, -28): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (4, 1, 4): (
                 tile_type: Cube((Some((
@@ -1712,21 +1600,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-11, 0, 7): (
-                tile_type: Cube((Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )))),
-            ),
             (-14, 7, 7): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -1742,8 +1615,35 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 5, 1): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (-11, 0, 7): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
+            ),
+            (1, 0, 12): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (3, 0, 3): (
                 tile_type: Cube((Some((
@@ -1805,7 +1705,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-12, 4, 7): (
+            (-13, 7, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -1820,7 +1720,22 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-13, 7, 6): (
+            (4, 1, 6): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
+            ),
+            (-12, 4, 7): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -1865,7 +1780,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (4, 1, 6): (
+            (0, 0, 13): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -1879,9 +1794,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 4, -1): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (4, 0, 8): (
                 tile_type: Cube((Some((
@@ -1913,11 +1825,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -36, -69): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -2, -8): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (-1, 0, 13): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-12, 1, 10): (
                 tile_type: Cube((Some((
@@ -1964,9 +1885,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -35, -65): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-5, 0, 4): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -1982,43 +1900,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 3, -3): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 2, -16): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-14, 0, 8): (
-                tile_type: Cube((Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )))),
-            ),
-            (-12, 1, 4): (
-                tile_type: Cube((Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )))),
-            ),
-            (-8, 0, 9): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -2048,7 +1930,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-13, 8, 6): (
+            (-8, 0, 9): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -2063,11 +1945,35 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 3, -7): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (-12, 1, 4): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
-            (-10, 2, -10): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (-13, 8, 6): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-4, 0, 7): (
                 tile_type: Cube((Some((
@@ -2173,9 +2079,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 1, -12): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-11, 5, 8): (
                 tile_type: Cube((Some((
@@ -2297,12 +2200,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (6, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 2, 7): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (4, 0, 4): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -2393,15 +2290,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 2, 5): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -4, -2): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -3, -33): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (6, 2, 3): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -2447,12 +2335,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 4, -3): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -28, -65): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (5, 0, 3): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -2469,10 +2351,34 @@
                 )))),
             ),
             (3, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
-            (-10, -33, -58): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (1, 0, 10): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (0, 0, 9): (
                 tile_type: Cube((Some((
@@ -2488,9 +2394,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -1, -30): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-11, 1, 7): (
                 tile_type: Cube((Some((
@@ -2521,9 +2424,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -12, -8): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (3, 1, 3): (
                 tile_type: Cube((Some((
@@ -2616,7 +2516,19 @@
                 )))),
             ),
             (-2, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (6, 0, 8): (
                 tile_type: Cube((Some((
@@ -2648,9 +2560,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 3, 1): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (4, 1, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -2681,9 +2590,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 2, -18): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-12, 0, 10): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -2713,9 +2619,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 2, 9): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-13, 6, 8): (
                 tile_type: Cube((Some((
@@ -2762,14 +2665,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (6, 0, 11): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -19, -17): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-3, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (5, 2, 5): (
                 tile_type: Cube((Some((
@@ -2801,9 +2710,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -8, -5): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-7, 0, 5): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -2818,9 +2724,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -6, -28): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (4, 0, 3): (
                 tile_type: Cube((Some((
@@ -2958,13 +2861,34 @@
                 )))),
             ),
             (-4, 0, 11): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (2, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -14, -10): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-10, 0, 8): (
                 tile_type: Cube((Some((
@@ -3071,9 +2995,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -18, -15): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-11, 10, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3134,9 +3055,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -34, -69): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-11, 1, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3182,12 +3100,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -5, -12): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -24, -41): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-11, 6, 7): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3217,9 +3129,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -14, -39): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-13, 1, 6): (
                 tile_type: Cube((Some((
@@ -3251,10 +3160,22 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-6, 0, 13): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-8, 1, 6): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
+            ),
+            (3, 0, 11): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -3283,9 +3204,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -36, -52): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (0, 0, 4): (
                 tile_type: Cube((Some((
@@ -3317,9 +3235,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -8, -15): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-9, 0, 9): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3334,9 +3249,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 6, -1): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-7, 1, 5): (
                 tile_type: Cube((Some((
@@ -3398,8 +3310,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 7, -10): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (-2, 0, 11): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-5, 0, 7): (
                 tile_type: Cube((Some((
@@ -3416,9 +3340,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 4, -5): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-12, 8, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3433,15 +3354,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -38, -62): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -9, -17): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -23, -49): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-14, 0, 5): (
                 tile_type: Cube((Some((
@@ -3487,9 +3399,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 3, -5): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-10, 1, 8): (
                 tile_type: Cube((Some((
@@ -3551,9 +3460,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -16, -26): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-7, 3, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3599,7 +3505,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (1, 0, 3): (
+            (2, 0, 8): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -3629,7 +3535,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (0, 0, 6): (
+            (1, 0, 3): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -3659,7 +3565,7 @@
                     tile_idx: 0,
                 )))),
             ),
-            (2, 0, 8): (
+            (0, 0, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
                 )), Some((
@@ -3673,9 +3579,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-4, 0, 13): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-11, 2, 8): (
                 tile_type: Cube((Some((
@@ -3691,9 +3594,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -15, -12): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (3, 0, 7): (
                 tile_type: Cube((Some((
@@ -3875,15 +3775,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -1, -15): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 7, -8): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -17, -53): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (5, 2, 3): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3899,12 +3790,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -17, -28): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 2, -4): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-13, 0, 4): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -3919,15 +3804,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (4, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -12, -25): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -6, -12): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-10, 1, 6): (
                 tile_type: Cube((Some((
@@ -3988,9 +3864,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -3, -25): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-8, 0, 6): (
                 tile_type: Cube((Some((
@@ -4082,12 +3955,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -17, -14): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 7, -3): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (0, 0, 3): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -4148,9 +4015,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -7, -14): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (5, 1, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -4165,9 +4029,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, 1, -19): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (4, 0, 9): (
                 tile_type: Cube((Some((
@@ -4319,12 +4180,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-5, 0, 11): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 7, -7): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-9, 1, 6): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -4446,10 +4301,19 @@
                 )))),
             ),
             (-1, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 0, -22): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-11, 0, 4): (
                 tile_type: Cube((Some((
@@ -4497,7 +4361,19 @@
                 )))),
             ),
             (0, 0, 12): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-12, 3, 6): (
                 tile_type: Cube((Some((
@@ -4573,12 +4449,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (4, 0, 11): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 4, -2): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-5, 0, 5): (
                 tile_type: Cube((Some((
@@ -4776,7 +4646,19 @@
                 )))),
             ),
             (-3, 0, 11): (
-                tile_type: Cube((None, None, None, None, None, None)),
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-4, 0, 4): (
                 tile_type: Cube((Some((
@@ -4807,12 +4689,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -3, -19): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -5, -22): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-11, 5, 9): (
                 tile_type: Cube((Some((
@@ -4859,9 +4735,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -9, -31): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-12, 1, 3): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -4877,14 +4750,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, -30, -40): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -13, -9): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -18, -31): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (1, 0, 11): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-13, 1, 8): (
                 tile_type: Cube((Some((
@@ -4900,15 +4779,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-10, -21, -21): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 4, -4): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -10, -29): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (4, 0, 7): (
                 tile_type: Cube((Some((
@@ -4939,12 +4809,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-6, 0, 14): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, 1, -5): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-12, 0, 9): (
                 tile_type: Cube((Some((
@@ -5020,9 +4884,6 @@
                 )), Some((
                     tile_idx: 0,
                 )))),
-            ),
-            (-5, 0, 13): (
-                tile_type: Cube((None, None, None, None, None, None)),
             ),
             (-12, 0, 11): (
                 tile_type: Cube((Some((
@@ -5144,21 +5005,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-12, 0, 5): (
-                tile_type: Cube((Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )), Some((
-                    tile_idx: 0,
-                )))),
-            ),
             (2, 2, 5): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -5174,8 +5020,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 2, 8): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (-12, 0, 5): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
             (-5, 1, 5): (
                 tile_type: Cube((Some((
@@ -5237,12 +5095,6 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 3, 2): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
-            (-10, -20, -19): (
-                tile_type: Cube((None, None, None, None, None, None)),
-            ),
             (-10, 8, 7): (
                 tile_type: Cube((Some((
                     tile_idx: 0,
@@ -5303,8 +5155,20 @@
                     tile_idx: 0,
                 )))),
             ),
-            (-10, 3, 0): (
-                tile_type: Cube((None, None, None, None, None, None)),
+            (-2, 0, 13): (
+                tile_type: Cube((Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )), Some((
+                    tile_idx: 0,
+                )))),
             ),
         },
         image: Some((

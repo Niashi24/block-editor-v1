@@ -5,11 +5,8 @@ use std::{
 };
 
 use bevy::{
-    asset::{Assets, RenderAssetUsages},
-    ecs::{
-        component::Component, entity::Entity, hierarchy::ChildOf, system::EntityCommand,
-        world::EntityWorldMut,
-    },
+    asset::RenderAssetUsages,
+    ecs::component::Component,
     math::{Dir3, IVec3, Quat, Vec2, Vec3},
     mesh::{Indices, Mesh, Mesh3d},
     platform::collections::HashMap,
@@ -32,9 +29,7 @@ use parry3d::{
 use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
-use crate::{
-    CubeTileFace, TileFace, observe_draw_hit_gizmos, on_press_add_remove,
-};
+use crate::{CubeTileFace, TileFace};
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -69,7 +64,6 @@ pub struct TilemapCollision {
 // }
 
 impl TilemapCollision {
-
     pub fn add(&mut self, pos: IVec3, tile: &TileData) {
         self.remove_at(pos);
 
@@ -160,7 +154,6 @@ pub struct Tilemap {
 }
 
 impl Tilemap {
-
     // pub fn add_cube(&mut self, tilemap_entity: Entity, pos: IVec3, commands: &mut Commands, mesh_assets: &mut ResMut<Assets<Mesh>>) {
     //     self.data.add_cube(tilemap_entity, pos, commands, mesh_assets);
     //     self.collision.add_cube(pos);
@@ -217,14 +210,14 @@ impl Tilemap {
         self.data.remove_at(pos)
     }
 
-    fn regenerate_mesh(mut world: EntityWorldMut) {
-        let tilemap = world.get::<Tilemap>().unwrap();
-        let mesh = tilemap.data.create_mesh();
-        let mesh =
-            world.resource_scope::<Assets<Mesh>, _>(|_, mut mesh_assets| mesh_assets.add(mesh));
+    // fn regenerate_mesh(mut world: EntityWorldMut) {
+    //     let tilemap = world.get::<Tilemap>().unwrap();
+    //     let mesh = tilemap.data.create_mesh();
+    //     let mesh =
+    //         world.resource_scope::<Assets<Mesh>, _>(|_, mut mesh_assets| mesh_assets.add(mesh));
 
-        world.insert((Mesh3d(mesh),));
-    }
+    //     world.insert((Mesh3d(mesh),));
+    // }
 
     // pub(crate) fn add(pos: IVec3, tile: TileData) -> impl EntityCommand {
     //     move |world: EntityWorldMut| {
@@ -275,9 +268,9 @@ impl TilemapData {
         self.tiles.insert(pos, tile)
     }
 
-    pub fn get(&self, pos: IVec3) -> Option<&TileData> {
-        self.tiles.get(&pos)
-    }
+    // pub fn get(&self, pos: IVec3) -> Option<&TileData> {
+    //     self.tiles.get(&pos)
+    // }
 
     pub fn remove_at(&mut self, pos: IVec3) -> Option<TileData> {
         self.tiles.remove(&pos)

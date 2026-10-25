@@ -12,7 +12,7 @@ snafu = "0.9.0"
 serde = { version = "1.0.228", features = ["serde_derive"] }
 parry3d = "0.26.1"
 ron = "0.12.1"
-iddqd = "0.4.2"
+# iddqd = "0.4.2"
 tiny_bail = "0.7.0"
 typetag = "0.2.23"
 toml = "1.1.8"

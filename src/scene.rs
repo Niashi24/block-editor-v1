@@ -1,10 +1,27 @@
-use std::{collections::VecDeque, ffi::OsString, fs::File, io::{BufWriter, ErrorKind}, path::{Path, PathBuf}, sync::{Arc, Mutex}};
+use std::{
+    collections::VecDeque,
+    fs::File,
+    io::{BufWriter, ErrorKind},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
-use bevy::{app::{Plugin, PostStartup, Startup, Update}, asset::AssetServer, camera::Camera, ecs::prelude::*, image::Image, input::{ButtonInput, keyboard::KeyCode}, math::{IVec3, Isometry3d}, pbr::{MeshMaterial3d, StandardMaterial}, tasks::AsyncComputeTaskPool, transform::components::Transform};
+use bevy::{
+    app::{Plugin, PostStartup, Update},
+    asset::AssetServer,
+    camera::Camera,
+    ecs::prelude::*,
+    image::Image,
+    input::{ButtonInput, keyboard::KeyCode},
+    math::Isometry3d,
+    pbr::{MeshMaterial3d, StandardMaterial},
+    tasks::AsyncComputeTaskPool,
+    transform::components::Transform,
+};
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
-use snafu::{OptionExt, ResultExt, Whatever, whatever};
-use tiny_bail::{or_return, or_return_quiet};
+use snafu::{ResultExt, Whatever, whatever};
+use tiny_bail::or_return;
 
 use crate::tilemap::{self, Tilemap, TilemapData, TilemapImage};
 
@@ -13,9 +30,7 @@ pub struct ScenePlugin;
 impl Plugin for ScenePlugin {
     fn build(&self, app: &mut bevy::app::App) {
         let save_data = match std::fs::read_to_string("editor.toml") {
-            Ok(file) => {
-                toml::from_str::<EditorSaveData>(&file).unwrap()
-            },
+            Ok(file) => toml::from_str::<EditorSaveData>(&file).unwrap(),
             Err(err) if err.kind() == ErrorKind::NotFound => {
                 let save_data = EditorSaveData::default();
 
@@ -23,16 +38,16 @@ impl Plugin for ScenePlugin {
                 std::fs::write("editor.toml", &file).unwrap();
 
                 save_data
-            },
-            Err(err) => panic!("error reading save data: {err}")
+            }
+            Err(err) => panic!("error reading save data: {err}"),
         };
 
         app.insert_resource(EditorData {
             save_data,
             current_scene_path: None,
         })
-            .add_systems(PostStartup, Self::load_latest_scene)
-            .add_systems(Update, (Self::load_keybind, Self::save_keybind));
+        .add_systems(PostStartup, Self::load_latest_scene)
+        .add_systems(Update, (Self::load_keybind, Self::save_keybind));
     }
 }
 
@@ -48,7 +63,14 @@ impl ScenePlugin {
         let path = or_return!(editor_data.save_data.recent_scenes.front()).clone();
         editor_data.current_scene_path = Some(path);
 
-        Self::load(commands, editor_data, tilemap_entity, camera_entity, asset_server, history)
+        Self::load(
+            commands,
+            editor_data,
+            tilemap_entity,
+            camera_entity,
+            asset_server,
+            history,
+        )
     }
 
     fn load_keybind(
@@ -67,7 +89,14 @@ impl ScenePlugin {
             if let SelectionState::Ready(path) = &mut *or_return!(path.lock()) {
                 if let Some(path) = path.take() {
                     editor_data.set_scene_path(path);
-                    Self::load(commands, editor_data, tilemap_entity, camera_entity, asset_server, history);
+                    Self::load(
+                        commands,
+                        editor_data,
+                        tilemap_entity,
+                        camera_entity,
+                        asset_server,
+                        history,
+                    );
                 }
 
                 reset = true;
@@ -85,9 +114,11 @@ impl ScenePlugin {
                         let file = rfd::AsyncFileDialog::new()
                             .add_filter("Scene (.ron)", &["ron"])
                             .set_directory("assets")
-                            .pick_file().await;
+                            .pick_file()
+                            .await;
 
-                        *select.lock().unwrap() = SelectionState::Ready(file.map(|handle| handle.path().to_path_buf()));
+                        *select.lock().unwrap() =
+                            SelectionState::Ready(file.map(|handle| handle.path().to_path_buf()));
                     })
                     .detach();
                 // if editor_data.current_scene_path.is_some() && !input.pressed(KeyCode::ShiftLeft) {
@@ -108,7 +139,11 @@ impl ScenePlugin {
     ) {
         let path = or_return!(editor_data.current_scene_path.as_ref());
 
-        let Scene { camera, history: saved_history, mut tilemap_data } = or_return!(Scene::load(path));
+        let Scene {
+            camera,
+            history: saved_history,
+            mut tilemap_data,
+        } = or_return!(Scene::load(path));
 
         tilemap_data.image = Some(TilemapImage {
             path: String::from("atlas.png"),
@@ -176,7 +211,6 @@ impl ScenePlugin {
                 *selection = None;
             }
         } else {
-
             if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyS) {
                 if editor_data.current_scene_path.is_some() && !input.pressed(KeyCode::ShiftLeft) {
                     Self::save(&*editor_data, &*tilemap_entity, &*camera_entity, &*history);
@@ -188,18 +222,19 @@ impl ScenePlugin {
                             let file = rfd::AsyncFileDialog::new()
                                 .add_filter("Scene (.ron)", &["ron"])
                                 .set_directory("assets")
-                                .save_file().await;
+                                .save_file()
+                                .await;
 
-                            *select.lock().unwrap() = SelectionState::Ready(file.map(|handle| handle.path().to_path_buf()));
+                            *select.lock().unwrap() = SelectionState::Ready(
+                                file.map(|handle| handle.path().to_path_buf()),
+                            );
                         })
                         .detach();
                 }
             }
         }
 
-
-        if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyS) {
-        }
+        if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyS) {}
     }
 
     fn save(
@@ -208,7 +243,6 @@ impl ScenePlugin {
         camera_transform: &Transform,
         history: &History,
     ) {
-
         let path = or_return!(editor_data.current_scene_path.as_ref());
         let tilemap_data = tilemap_entity.data.clone();
         let camera = camera_transform.to_isometry();
@@ -271,13 +305,9 @@ pub struct History {
 
 impl Clone for History {
     fn clone(&self) -> Self {
-        let history = self.history.iter()
-            .map(|x| x.clone_dyn())
-            .collect();
+        let history = self.history.iter().map(|x| x.clone_dyn()).collect();
 
-        let redo = self.redo.iter()
-            .map(|x| x.clone_dyn())
-            .collect();
+        let redo = self.redo.iter().map(|x| x.clone_dyn()).collect();
 
         Self { history, redo }
     }
@@ -334,7 +364,6 @@ impl Default for Scene {
 
 impl Scene {
     pub fn save(&self, path: &Path) -> Result<(), Whatever> {
-
         let file = File::create(path).whatever_context("create file")?;
         let mut file = BufWriter::new(file);
         ron::Options::default()
