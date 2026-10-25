@@ -1,6 +1,6 @@
-- [X] Rework to picking (ACTIVE)
+- [X] Rework to picking
 - [X] Undo/Redo system
-- [ ] Editor Data
+- [X] Editor Data
 - [ ] UI Layout
 - [ ] Tileset Editor
 - [ ] Different terrain shapes
