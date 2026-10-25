@@ -15,6 +15,9 @@ ron = "0.12.1"
 iddqd = "0.4.2"
 tiny_bail = "0.7.0"
 typetag = "0.2.23"
+toml = "1.1.8"
+rfd = "0.17.2"
+crossbeam-channel = "0.5.17"
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]
