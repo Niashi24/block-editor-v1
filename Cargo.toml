@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bevy = { version = "0.20", features = ["bevy_dev_tools", "bevy_camera_controller", "free_camera", "pan_camera", "debug", "render_dev_tools"] }
+bevy = { version = "0.20", features = ["bevy_dev_tools", "bevy_camera_controller", "free_camera", "pan_camera", "debug", "render_dev_tools", "bevy_feathers"] }
 bytemuck = "1.25.0"
 gltf-json = { version = "1.4.1", features = ["KHR_texture_transform"] }
 wgpu-types = { version = "30.0", default-features = false }
@@ -18,6 +18,8 @@ typetag = "0.2.23"
 toml = "1.1.8"
 rfd = "0.17.2"
 crossbeam-channel = "0.5.17"
+bevy-inspector-egui = "0.38.0"
+bevy_egui = { version = "0.43.1", features = ["bevy_ui", "picking"] }
 
 # Enable a small amount of optimization in the dev profile.
 [profile.dev]

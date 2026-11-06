@@ -15,10 +15,7 @@ use bevy::{
 };
 
 use gltf_json::{
-    self as gltf,
-    material::{EmissiveFactor, PbrMetallicRoughness},
-    texture::Info,
-    validation::{Checked, USize64},
+    self as gltf, material::{AlphaCutoff, EmissiveFactor, PbrMetallicRoughness}, texture::Info, validation::{Checked, USize64},
 };
 use parry3d::{
     math::{Pose3, Vec3 as Vec3P, Vector},
@@ -282,8 +279,8 @@ impl TilemapData {
         let image_path = self
             .image
             .as_ref()
-            .map(|img| img.path.clone())
-            .unwrap_or_else(|| "PrototypeTextures.png".to_string());
+            .map(|img| img.path.as_str())
+            .unwrap_or("PrototypeTextures.png");
         let image_path = format!("../assets/{}", image_path);
 
         let image = root.push(gltf::Image {
@@ -314,8 +311,8 @@ impl TilemapData {
         });
 
         let material = root.push(gltf::Material {
-            alpha_cutoff: None,
-            alpha_mode: Checked::Valid(gltf::material::AlphaMode::Blend),
+            alpha_cutoff: Some(AlphaCutoff(0.5)),
+            alpha_mode: Checked::Valid(gltf::material::AlphaMode::Mask),
             double_sided: false,
             name: None,
             pbr_metallic_roughness: PbrMetallicRoughness {
@@ -660,10 +657,10 @@ impl TilemapImage {
         let (tl_x, tl_y) = (tl_x * self.tile_width, tl_y * self.tile_height);
         let (br_x, br_y) = (tl_x + self.tile_width, tl_y + self.tile_height);
 
-        [[tl_x, tl_y], [br_x, br_y]].map(|f| {
+        [[tl_x as f32 + 0.1, tl_y as f32 + 0.1], [br_x as f32 - 0.1, br_y as f32 - 0.1]].map(|f| {
             [
-                f[0] as f32 / self.image_width as f32,
-                f[1] as f32 / self.image_height as f32,
+                f[0] / self.image_width as f32,
+                f[1] / self.image_height as f32,
             ]
         })
     }
@@ -752,5 +749,5 @@ impl TileType {
 
 #[derive(Clone, Copy, Debug, Serialize, Deserialize)]
 pub struct FaceData {
-    tile_idx: u32,
+    pub tile_idx: u32,
 }

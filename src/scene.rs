@@ -7,23 +7,15 @@ use std::{
 };
 
 use bevy::{
-    app::{Plugin, PostStartup, Update},
-    asset::AssetServer,
-    camera::Camera,
-    ecs::prelude::*,
-    image::Image,
-    input::{ButtonInput, keyboard::KeyCode},
-    math::Isometry3d,
-    pbr::{MeshMaterial3d, StandardMaterial},
-    tasks::AsyncComputeTaskPool,
-    transform::components::Transform,
+    app::{Plugin, PostStartup, Update}, asset::AssetServer, camera::Camera, ecs::prelude::*, image::Image, input::{ButtonInput, keyboard::KeyCode}, math::{Isometry3d, Quat}, pbr::{MeshMaterial3d, StandardMaterial}, tasks::AsyncComputeTaskPool, transform::components::Transform, utils::default,
 };
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Whatever, whatever};
 use tiny_bail::or_return;
 
-use crate::tilemap::{self, Tilemap, TilemapData, TilemapImage};
+use crate::{TilemapCamera, tilemap::{self, Tilemap, TilemapData, TilemapImage}};
+use crate::SelectionState as CameraSelectionState;
 
 pub struct ScenePlugin;
 
@@ -47,8 +39,32 @@ impl Plugin for ScenePlugin {
             current_scene_path: None,
         })
         .add_systems(PostStartup, Self::load_latest_scene)
-        .add_systems(Update, (Self::load_keybind, Self::save_keybind));
+        .add_systems(Update, (Self::load_keybind, Self::save_keybind))
+        .add_observer(make_new_scene);
     }
+}
+
+#[derive(Debug, Clone, Copy, Event)]
+pub struct NewScene;
+
+fn make_new_scene(
+    _: On<NewScene>,
+    mut editor_data: ResMut<EditorData>,
+    mut tilemap_entity: Single<(Entity, &mut Tilemap)>,
+    mut camera_entity: Single<&mut Transform, With<TilemapCamera>>,
+    // mut asset_server: Res<AssetServer>,
+    mut history: ResMut<History>,
+) {
+    editor_data.current_scene_path = None;
+    *tilemap_entity.1 = Tilemap {
+        dirty: true,
+        ..default()
+    };
+
+    let camera_transform = Transform::from_xyz(0.0, 15.0, 15.0)
+        .with_rotation(Quat::from_rotation_x(-45.0f32.to_radians()));
+    **camera_entity = camera_transform;
+    *history = History::default();
 }
 
 impl ScenePlugin {
@@ -56,7 +72,7 @@ impl ScenePlugin {
         commands: Commands,
         mut editor_data: ResMut<EditorData>,
         tilemap_entity: Single<(Entity, &mut Tilemap)>,
-        camera_entity: Single<&mut Transform, With<Camera>>,
+        camera_entity: Single<&mut Transform, With<TilemapCamera>>,
         asset_server: Res<AssetServer>,
         history: ResMut<History>,
     ) {
@@ -77,7 +93,7 @@ impl ScenePlugin {
         commands: Commands,
         mut editor_data: ResMut<EditorData>,
         tilemap_entity: Single<(Entity, &mut Tilemap)>,
-        camera_entity: Single<&mut Transform, With<Camera>>,
+        camera_entity: Single<&mut Transform, With<TilemapCamera>>,
         asset_server: Res<AssetServer>,
         input: Res<ButtonInput<KeyCode>>,
         history: ResMut<History>,
@@ -133,7 +149,7 @@ impl ScenePlugin {
         mut commands: Commands,
         mut editor_data: ResMut<EditorData>,
         tilemap_entity: Single<(Entity, &mut Tilemap)>,
-        mut camera_entity: Single<&mut Transform, With<Camera>>,
+        mut camera_entity: Single<&mut Transform, With<TilemapCamera>>,
         asset_server: Res<AssetServer>,
         mut history: ResMut<History>,
     ) {
@@ -142,16 +158,16 @@ impl ScenePlugin {
         let Scene {
             camera,
             history: saved_history,
-            mut tilemap_data,
+            tilemap_data,
         } = or_return!(Scene::load(path));
 
-        tilemap_data.image = Some(TilemapImage {
-            path: String::from("atlas.png"),
-            image_width: 160,
-            image_height: 110,
-            tile_width: 16,
-            tile_height: 11,
-        });
+        // tilemap_data.image = Some(TilemapImage {
+        //     path: String::from("atlas.png"),
+        //     image_width: 160,
+        //     image_height: 110,
+        //     tile_width: 16,
+        //     tile_height: 11,
+        // });
 
         let (tilemap_entity, mut tilemap) = tilemap_entity.into_inner();
 
@@ -186,7 +202,7 @@ impl ScenePlugin {
     fn save_keybind(
         mut editor_data: ResMut<EditorData>,
         tilemap_entity: Single<&Tilemap>,
-        camera_entity: Single<&Transform, With<Camera>>,
+        camera_entity: Single<&mut Transform, With<TilemapCamera>>,
         input: Res<ButtonInput<KeyCode>>,
         history: ResMut<History>,
         mut selection: Local<Option<Arc<Mutex<SelectionState>>>>,

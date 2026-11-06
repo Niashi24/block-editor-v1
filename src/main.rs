@@ -10,19 +10,23 @@ mod tilemap;
 use std::sync::Arc;
 
 use bevy::{
-    dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::NormedVectorSpace, picking::backend::{
+    camera::{RenderTarget, Viewport, visibility::RenderLayers}, color::palettes, dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, feathers::{FeathersPlugins, controls::FeathersButton, dark_theme::create_dark_theme, display::caption, theme::UiTheme}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::NormedVectorSpace, picking::backend::{
         HitData, HitDataExtra, PointerHits,
         ray::{RayId, RayMap},
-    }, platform::collections::{HashMap, HashSet, hash_map::Entry}, prelude::*, window::{CursorIcon, CursorOptions},
+    }, platform::collections::{HashMap, HashSet, hash_map::Entry}, prelude::*, ui::{debug::print_ui_layout_tree, ui_surface::UiSurface}, ui_widgets::{Activate, Button, ButtonPlugin}, window::{CursorIcon, CursorOptions},
 };
 use serde::{Deserialize, Serialize};
-use tiny_bail::or_continue;
+use tiny_bail::{or_continue, or_continue_quiet};
+use wgpu_types::TextureFormat;
+use bevy_inspector_egui::{quick::WorldInspectorPlugin};
+use bevy_egui::EguiPlugin;
 
 use crate::{
-    TileFace::InfinitePlane,
-    scene::{History, Redo, ScenePlugin, Undo},
-    tilemap::{TileData, TileType, Tilemap, tilemap_coord_to_center},
+    TileFace::InfinitePlane, scene::{History, NewScene, Redo, ScenePlugin, Undo}, tilemap::{FaceData, TileData, TileType, Tilemap, tilemap_coord_to_center},
 };
+
+const VIEWPORT_RENDER_LAYER: RenderLayers = RenderLayers::layer(0);
+const TILESET_RENDER_LAYER: RenderLayers = RenderLayers::layer(1);
 
 fn main() {
     App::new()
@@ -30,6 +34,9 @@ fn main() {
             DefaultPlugins.set(ImagePlugin::default_nearest()),
             InfiniteGridPlugin,
             ScenePlugin,
+            EguiPlugin::default(),
+            WorldInspectorPlugin::new(),
+            FeathersPlugins,
             // FpsOverlayPlugin {
             //     ..Default::default()
             // },
@@ -48,10 +55,19 @@ fn main() {
                 draw_selection_gizmos,
             ),
         )
+        .insert_resource(UiTheme(create_dark_theme()))
         .init_resource::<MeshData>()
         .init_resource::<History>()
+        .insert_gizmo_config(SelectionGizmosGroup, GizmoConfig {
+            render_layers: VIEWPORT_RENDER_LAYER,
+            ..default()
+        })
         .run();
 }
+
+// We can create our own gizmo config group!
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct SelectionGizmosGroup;
 
 fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Query<&mut SelectionGizmos>) {
     let PointerMove {
@@ -65,7 +81,7 @@ fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Query<&mut Select
 
     let mut gizmos = gizmos.get_mut(hit.camera).unwrap();
 
-    *gizmos = SelectionGizmos {
+    *gizmos = SelectionGizmos::AddTerrain {
         circle_iso: Isometry3d::new(
             hit.position.unwrap(),
             Transform::default()
@@ -78,25 +94,47 @@ fn observe_draw_hit_gizmos(event: On<PointerMove>, mut gizmos: Query<&mut Select
 }
 
 #[derive(Debug, Component, Default)]
-struct SelectionGizmos {
-    circle_iso: Isometry3d,
-    tile_pos: IVec3,
-    new_tile_pos: IVec3,
+enum SelectionGizmos {
+    #[default]
+    None,
+    AddTerrain {
+        circle_iso: Isometry3d,
+        tile_pos: IVec3,
+        new_tile_pos: IVec3,
+    },
+    PaintTile {
+        tile_pos: IVec3,
+        face: TileFace,
+    },
 }
 
-fn draw_selection_gizmos(mut gizmos: Gizmos, selection_gizmos: Query<&SelectionGizmos>) {
+fn draw_selection_gizmos(mut gizmos: Gizmos<SelectionGizmosGroup>, selection_gizmos: Query<&SelectionGizmos>) {
     for selection in selection_gizmos.iter() {
-        gizmos.circle(selection.circle_iso, 0.125, Color::WHITE);
+        match *selection {
+            SelectionGizmos::None => {}
+            SelectionGizmos::AddTerrain { circle_iso, tile_pos, new_tile_pos } => {
+                gizmos.circle(circle_iso, 0.125, Color::WHITE);
 
-        gizmos.cube(
-            Transform::from_translation(tilemap_coord_to_center(selection.tile_pos)),
-            Color::linear_rgb(1.0, 0.0, 0.0),
-        );
+                gizmos.cube(
+                    Transform::from_translation(tilemap_coord_to_center(tile_pos)),
+                    Color::linear_rgb(1.0, 0.0, 0.0),
+                );
 
-        gizmos.cube(
-            Transform::from_translation(tilemap_coord_to_center(selection.new_tile_pos)),
-            Color::WHITE,
-        );
+                gizmos.cube(
+                    Transform::from_translation(tilemap_coord_to_center(new_tile_pos)),
+                    Color::WHITE,
+                );
+            }
+            SelectionGizmos::PaintTile { tile_pos, face } => {
+                let (plane, position) = face.to_primitive(tile_pos);
+                gizmos
+                    .primitive_3d(
+                        &plane,
+                        Isometry3d::from_translation(position),
+                        palettes::css::GREEN,
+                    );
+            },
+        }
     }
 }
 
@@ -130,6 +168,25 @@ impl TileFace {
             }
         }
     }
+
+    fn to_primitive(&self, tile: IVec3) -> (Plane3d, Vec3) {
+        match *self {
+            TileFace::Cube(cube_tile_face) => {
+                let normal = cube_tile_face.new_tile_offset().as_vec3();
+                let tile_position = tilemap_coord_to_center(tile) + normal * 0.5;
+                (
+                    Plane3d {
+                        normal: Dir3::new_unchecked(normal),
+                        half_size: Vec2::splat(0.5),
+                    },
+                    tile_position,
+                )
+            },
+            InfinitePlane(ivec3) => {
+                todo!()
+            },
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -143,6 +200,7 @@ pub enum CubeTileFace {
 }
 
 impl CubeTileFace {
+    // NOTE: must be unit vector
     pub fn new_tile_offset(&self) -> IVec3 {
         match self {
             CubeTileFace::Top => IVec3::Y,
@@ -182,7 +240,7 @@ fn update_hits(
 ) {
     let (tilemap_entity, tilemap) = tilemap.into_inner();
     for (&ray_id, &ray) in ray_map.iter() {
-        let (camera, selection_state) = or_continue!(camera.get(ray_id.camera));
+        let (camera, selection_state) = or_continue_quiet!(camera.get(ray_id.camera));
 
         let pick = match &*selection_state {
             SelectionState::None => {
@@ -242,6 +300,7 @@ fn keyboard_funcs(
     tilemap_entity: Single<(Entity, &Tilemap)>,
     input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
+    ui_surface: Res<UiSurface>,
 ) {
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyE) {
         tilemap_entity.1.data.export();
@@ -254,10 +313,14 @@ fn keyboard_funcs(
             commands.entity(tilemap_entity.0).queue(History::redo());
         }
     }
+
+    if input.just_pressed(KeyCode::KeyP) {
+        print_ui_layout_tree(&*&ui_surface);
+    }
 }
 
 #[derive(Debug, Clone, Copy)]
-struct ActivePlane {
+pub struct ActivePlane {
     pub depth: i32,
     pub normal: IVec3,
 }
@@ -291,8 +354,37 @@ impl ActivePlane {
     }
 }
 
+#[derive(Resource, Debug, Serialize, Deserialize)]
+pub struct TileSelections {
+    pub cube: [Option<FaceData>; 6],
+    pub tile: u32,
+    pub tool: ToolSelection,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum TileSelection {
+    One(u32),
+    Two([u32; 2])
+}
+
+impl Default for TileSelections {
+    fn default() -> Self {
+        Self {
+            cube: [Some(FaceData { tile_idx: 0 }); 6],
+            tile: 0,
+            tool: ToolSelection::Cube,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum ToolSelection {
+    Cube,
+    TilePaint,
+}
+
 #[derive(Component, Default, Debug)]
-enum SelectionState {
+pub enum SelectionState {
     #[default]
     None,
     Adding {
@@ -306,7 +398,7 @@ enum SelectionState {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct AddingDiff {
+pub struct AddingDiff {
     tile: TileData,
     added: HashSet<IVec3>,
     inserted: HashMap<IVec3, TileData>,
@@ -355,7 +447,7 @@ impl Redo for AddingDiff {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-struct RemovingDiff(HashMap<IVec3, TileData>);
+pub struct RemovingDiff(HashMap<IVec3, TileData>);
 
 #[typetag::serde]
 impl Undo for RemovingDiff {
@@ -559,13 +651,22 @@ fn grid_on_release(
     println!("Released mouse and going to None state");
 }
 
-fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>, window: Single<Entity, With<Window>>,) {
+#[derive(Component, Debug, Clone, Copy)]
+pub struct TilemapCamera;
+
+fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: Res<AssetServer>, window: Single<Entity, With<Window>>, mut images: ResMut<Assets<Image>>) {
+
+
+    // UI Camera
+    commands.spawn(Camera3d::default());
+
     commands
         .spawn((
             // You need to spawn an entity with this component
             InfiniteGrid,
             // Optional component you can use to configure the grid
             InfiniteGridSettings::default(),
+            VIEWPORT_RENDER_LAYER,
         ))
         .observe(observe_draw_hit_gizmos)
         .observe(on_press_add_remove)
@@ -581,6 +682,7 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
                 ..Default::default()
             },
             Visibility::Hidden,
+            VIEWPORT_RENDER_LAYER,
         ))
         .observe(observe_draw_hit_gizmos)
         .observe(on_drag_add_remove_tile)
@@ -590,32 +692,44 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
         .spawn((
             Tilemap::default(),
             MeshMaterial3d(mesh_data.cube_material.clone()),
+            VIEWPORT_RENDER_LAYER,
         ))
         .observe(observe_draw_hit_gizmos)
         .observe(on_press_add_remove);
 
-    let camera_transform = Transform::from_xyz(-12.5, 5.0, 10.0)
+    let render_image_3d = Image::new_target_texture(0, 0, TextureFormat::Rgba8UnormSrgb, None);
+    let render_image_3d_handle = images.add(render_image_3d);
+
+    let camera_transform = Transform::from_xyz(0.0, 15.0, 15.0)
         .with_rotation(Quat::from_rotation_x(-45.0f32.to_radians()));
-    commands.spawn((
+    let camera_3d = commands.spawn((
         Camera3d::default(),
+        Camera {
+            order: -1,
+            ..Default::default()
+        },
+        RenderTarget::Image(render_image_3d_handle.clone().into()),
+        VIEWPORT_RENDER_LAYER,
         SelectionState::default(),
         SelectionGizmos::default(),
+        TilemapCamera,
         // CameraMovement {
         //     translation: camera_transform.translation,
         //     rotation: camera_transform.rotation,
         // },
         camera_transform,
-    ));
+    ))
+    .id();
 
-    commands.spawn((
-        WorldAssetRoot(asset_server.load(GltfAssetLabel::Scene(0).from_asset("CharacterTest.glb"))),
-        Transform::IDENTITY,
-    ));
+    commands.insert_resource(GlobalAmbientLight {
+        brightness: 80.0,
+        ..default()
+    });
 
     // illuminace value determined from testing to match original textures
     commands.spawn((
         DirectionalLight {
-            illuminance: 4500.0,
+            illuminance: 5000.0,
             shadow_maps_enabled: true,
             ..default()
         },
@@ -625,11 +739,241 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
             -45.0f32.to_radians(),
             0.0,
         )),
+        VIEWPORT_RENDER_LAYER,
     ));
 
     commands.entity(*window)
         .insert(CursorIcon::default());
+
+    let viewport_node = ViewportNode::new(camera_3d);
+
+
+    // commands.spawn((
+    //     Sprite::from_image(asset_server.load("atlas.png")),
+    //     TILESET_RENDER_LAYER,
+    // ));
+
+    // let render_image_2d = Image::new_target_texture(0, 0, TextureFormat::Rgba8UnormSrgb, None);
+    // let render_image_2d_handle = images.add(render_image_2d);
+
+    // let tile_camera = commands.spawn((
+    //     Camera2d,
+    //     Camera {
+    //         order: -1,
+    //         ..Default::default()
+    //     },
+    //     RenderTarget::Image(render_image_2d_handle.into()),
+    //     TILESET_RENDER_LAYER,
+    // ))
+    //     .observe(|e: On<PointerMove>| {
+    //         dbg!(e.hit.position);
+    //     })
+    //     .id();
+
+    // let tile_node = ViewportNode::new(tile_camera);
+
+    fn nav_button(icon: &str) -> impl Scene {
+        fn hover_border(
+            e: On<PointerEnter>,
+            mut colors: Query<(&mut BorderColor, &mut BackgroundColor)>,
+        ) {
+            let (mut border, mut bg_color) = colors.get_mut(e.entity).unwrap();
+
+            *border = BorderColor::all(Color::srgb_u8(137, 137, 137));
+            *bg_color = BackgroundColor(Color::srgba_u8(137, 137, 137, 128));
+        }
+
+        fn exit_border(
+            e: On<PointerLeave>,
+            mut colors: Query<(&mut BorderColor, &mut BackgroundColor)>,
+        ) {
+            let (mut border, mut bg_color) = colors.get_mut(e.entity).unwrap();
+
+            *border = BorderColor::default();
+            *bg_color = BackgroundColor::default();
+        }
+
+        let icon = icon.to_owned();
+        bsn! {
+            Button
+            Node {
+                height: px(32),
+                width: px(32),
+                padding: px(4),
+                margin: px(2),
+                border: px(2),
+                box_sizing: BoxSizing::ContentBox,
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+            }
+            UiDebugOptions {
+                enabled: true,
+                // outline_border_box: true,
+                outline_content_box: true,
+                // outline_padding_box: true,
+            }
+            BorderColor
+            // Outline {
+            //     width: px(2),
+            //     color: Color::srgb_u8(137, 137, 137),
+            // }
+            BackgroundColor
+            Children [
+                Node {
+                    height: px(32),
+                    width: px(32),
+                }
+                ImageNode {
+                    image: icon,
+                }
+            ]
+            on(hover_border)
+            on(exit_border)
+        }
+    }
+
+    #[derive(Component, Debug, Clone, FromTemplate)]
+    struct TileHighlight {
+        pub selected_outline: Entity,
+        pub hovered_outline: Entity,
+    }
+
+    commands.queue_spawn_scene(bsn! {
+        #Root
+        Node {
+            position_type: PositionType::Absolute,
+            left: Val::Px(0.0),
+            top: Val::Px(0.0),
+            right: Val::Px(0.0),
+            bottom: Val::Px(0.0),
+            flex_direction: FlexDirection::Column,
+        }
+        Children [
+            #Header
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Px(48.0),
+                padding: px(4.0),
+
+                flex_direction: FlexDirection::Row,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Start,
+                // column_gap: Val::Px(16.0),
+            }
+            BackgroundColor(Color::srgb_u8(76, 70, 66))
+            Children [
+                // @FeathersButton {
+                //     @caption: bsn! { @caption("New") }
+                // }
+                // on(|_: On<Activate>, mut commands: Commands| {
+                //     commands.trigger(NewScene);
+                // })
+                // --
+                // @FeathersButton {
+                //     @caption: bsn! { @caption("Open") }
+                // }
+                // on(|_: On<Activate>| {
+                //     println!("Open");
+                // })
+                // --
+                // @nav_button("icons/save.png")
+                // --
+                // @nav_button("icons/undo.png")
+                // --
+                // @nav_button("icons/redo.png")
+            ]
+            --
+            Node {
+                width: Val::Percent(100.0),
+                flex_grow: 1.0,
+                flex_direction: FlexDirection::Row,
+            }
+            Children [
+                viewport_node
+                Node {
+                    height: Val::Percent(100.0),
+                    flex_grow: 1.0,
+                }
+                --
+                // tile_node
+                Node {
+                    height: Val::Percent(100.0),
+                    max_width: percent(50.0),
+                    flex_grow: 1.0,
+                    flex_direction: FlexDirection::Column,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                }
+                BackgroundColor(Color::WHITE)
+                Children [
+                    BackgroundColor(Color::srgb_u8(76, 70, 66))
+                    Node {
+                        width: percent(100.0),
+                        height: px(440),
+                    }
+                    ImageNode {
+                        image: "atlas.png"
+                    }
+                    TileHighlight {
+                        selected_outline: #TileActiveOutline,
+                        hovered_outline: #TileOutline,
+                    }
+                    on(|e: On<PointerMove>, tile: Query<&TileHighlight>, mut node: Query<&mut Node>| {
+                        let highlight = tile.get(e.entity).unwrap();
+                        dbg!(e.hit.camera);
+                        let mut node = node.get_mut(highlight.hovered_outline).unwrap();
+
+                        let uv = e.hit.position.unwrap().truncate() + Vec2::splat(0.5);
+                        let uv_i = (uv * 10.0).as_ivec2();
+
+                        node.top = percent((uv_i.y as f32) * 10.0);
+                        node.left = percent((uv_i.x as f32) * 10.0);
+                    })
+                    on(|e: On<PointerPress>, tile: Query<&TileHighlight>, mut node: Query<&mut Node>| {
+                        let highlight = tile.get(e.entity).unwrap();
+                        dbg!(e.hit.camera);
+                        let mut node = node.get_mut(highlight.hovered_outline).unwrap();
+
+                        let uv = e.hit.position.unwrap().truncate() + Vec2::splat(0.5);
+                        let uv_i = (uv * 10.0).as_ivec2();
+
+                        node.top = percent((uv_i.y as f32) * 10.0);
+                        node.left = percent((uv_i.x as f32) * 10.0);
+                    })
+                    Children [
+                        #TileOutline
+                        Node {
+                            position_type: PositionType::Absolute,
+                            width: percent(10.0),
+                            height: percent(10.0),
+                        }
+                        Outline {
+                            width: px(2),
+                            color: Color::srgb_u8(255, 0, 0),
+                        }
+                        Pickable::IGNORE
+                        --
+                        #TileActiveOutline
+                        Node {
+                            position_type: PositionType::Absolute,
+                            width: percent(10.0),
+                            height: percent(10.0),
+                        }
+                        Outline {
+                            width: px(2),
+                            color: Color::srgb_u8(255, 0, 0),
+                        }
+                        Pickable::IGNORE
+                    ]
+                ]
+            ]
+            --
+        ]
+    });
 }
+
+
+
 
 pub fn intersect_plane_full(
     ray: &Ray3d,
@@ -647,7 +991,7 @@ pub fn intersect_plane_full(
 // fn keyboard_move_system
 
 fn mouse_move_system(
-    camera: Single<(&mut Transform, &Camera, &GlobalTransform)>,
+    camera: Single<(&mut Transform, &Camera, &GlobalTransform), With<SelectionState>>,
     window: Single<&Window>,
     key_input: Res<ButtonInput<KeyCode>>,
     mouse_input: Res<ButtonInput<MouseButton>>,
