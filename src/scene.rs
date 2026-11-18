@@ -1,9 +1,24 @@
 use std::{
-    collections::VecDeque, env::current_dir, fs::File, io::{BufWriter, ErrorKind}, path::{Path, PathBuf}, sync::{Arc, Mutex},
+    collections::VecDeque,
+    env::current_dir,
+    fs::File,
+    io::{BufWriter, ErrorKind},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
 };
 
 use bevy::{
-    app::{Plugin, PostStartup, Update}, asset::AssetServer, camera::Camera, ecs::prelude::*, image::Image, input::{ButtonInput, keyboard::KeyCode}, math::{Isometry3d, Quat}, pbr::{MeshMaterial3d, StandardMaterial}, tasks::AsyncComputeTaskPool, transform::components::Transform, utils::default,
+    app::{Plugin, PostStartup, Update},
+    asset::AssetServer,
+    camera::Camera,
+    ecs::prelude::*,
+    image::Image,
+    input::{ButtonInput, keyboard::KeyCode},
+    math::{Isometry3d, Quat},
+    pbr::{MeshMaterial3d, StandardMaterial},
+    tasks::AsyncComputeTaskPool,
+    transform::components::Transform,
+    utils::default,
 };
 use relative_path::{RelativePath, RelativePathBuf};
 use ron::{extensions::Extensions, ser::PrettyConfig};
@@ -11,8 +26,11 @@ use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Whatever, whatever};
 use tiny_bail::or_return;
 
-use crate::{TilemapCamera, tilemap::{self, Tilemap, TilemapData, TilemapImage}};
 use crate::SelectionState as CameraSelectionState;
+use crate::{
+    TilemapCamera,
+    tilemap::{self, Tilemap, TilemapData, TilemapImage},
+};
 
 pub struct ScenePlugin;
 
@@ -89,7 +107,7 @@ impl ScenePlugin {
     fn load_keybind(
         commands: Commands,
         mut editor_data: ResMut<EditorData>,
-        tilemap_entity: Single<(Entity, &mut Tilemap)>,
+        mut tilemap_entity: Single<(Entity, &mut Tilemap)>,
         camera_entity: Single<&mut Transform, With<TilemapCamera>>,
         asset_server: Res<AssetServer>,
         input: Res<ButtonInput<KeyCode>>,
@@ -101,7 +119,7 @@ impl ScenePlugin {
 
             if let SelectionState::Ready(path) = &mut *or_return!(path.lock()) {
                 if let Some(path) = path.take() {
-                    editor_data.set_scene_path(path);
+                    editor_data.set_scene_path(path, &mut tilemap_entity.1.data);
                     Self::load(
                         commands,
                         editor_data,
@@ -172,11 +190,12 @@ impl ScenePlugin {
 
         let img = match &tilemap_data.image {
             Some(img) => {
-                let img_path = img.path.to_path(path);
+                let img_path = img.path.to_path(path.parent().unwrap());
+                dbg!(&img_path);
                 // dbg!(&img_path);
                 // let asset_path = get_relative_path(&current_dir().unwrap().into_boxed_path(), &img_path).to_string();
                 asset_server.load::<Image>(img_path)
-            },
+            }
             None => asset_server.load("PrototypeTextures/texture_08.png"),
         };
 
@@ -203,7 +222,7 @@ impl ScenePlugin {
 
     fn save_keybind(
         mut editor_data: ResMut<EditorData>,
-        tilemap_entity: Single<&Tilemap>,
+        mut tilemap_entity: Single<&mut Tilemap>,
         camera_entity: Single<&mut Transform, With<TilemapCamera>>,
         input: Res<ButtonInput<KeyCode>>,
         history: ResMut<History>,
@@ -215,9 +234,10 @@ impl ScenePlugin {
 
             if let SelectionState::Ready(path) = &mut *or_return!(path.lock()) {
                 if let Some(path) = path.take() {
-                    editor_data.current_scene_path = Some(path.clone());
-                    editor_data.save_data.recent_scenes.push_front(path);
-                    editor_data.save_data.save();
+                    editor_data.set_scene_path(path, &mut tilemap_entity.data);
+                    // editor_data.current_scene_path = Some(path.clone());
+                    // editor_data.save_data.recent_scenes.push_front(path);
+                    // editor_data.save_data.save();
 
                     Self::save(&*editor_data, &*tilemap_entity, &*camera_entity, &*history);
                 }
@@ -289,16 +309,22 @@ pub struct EditorData {
 }
 
 impl EditorData {
-    pub fn set_scene_path(&mut self, path: PathBuf) {
-        let _ = self.current_scene_path.insert(path.clone());
+    pub fn set_scene_path(&mut self, path: PathBuf, tilemap: &mut TilemapData) {
+        if let Some(old_path) = self.current_scene_path.replace(path.clone())
+            && let Some(img) = tilemap.image.as_mut()
+        {
+            let img_path = img.path.to_logical_path(old_path.parent().unwrap());
+            let new_path = img_path.relative_to(path.parent().unwrap());
+            img.path = new_path;
+        }
+
         self.save_data.recent_scenes.retain(|x| x != &path);
         self.save_data.recent_scenes.push_front(path);
         self.save_data.save();
     }
 
     pub fn scene_path(&self) -> Option<&Path> {
-        self.current_scene_path.as_ref()
-            .map(|p| p.as_path())
+        self.current_scene_path.as_ref().map(|p| p.as_path())
     }
 }
 
@@ -421,103 +447,102 @@ impl Scene {
     }
 }
 
+pub trait PathExt {
+    fn relative_to(&self, root: impl AsRef<Path>) -> RelativePathBuf;
+}
 
-pub fn get_relative_path(mut root: &Path, file: &Path) -> RelativePathBuf {
+impl<T: AsRef<Path>> PathExt for T {
+    /// Constructs a [RelativePathBuf] of this path relative to the given root path. Think of it as the inverse of [RelativePath::to_path]. It is required that the paths are **canonizable** ([Path::canonicalize] returns `Ok(_)`).
+    fn relative_to(&self, root: impl AsRef<Path>) -> RelativePathBuf {
+        fn get_relative_path(mut root: &Path, file: &Path) -> RelativePathBuf {
+            let mut root = root.canonicalize().unwrap();
 
-    let mut root = root.canonicalize().unwrap();
+            if !root.is_dir() {
+                root.pop();
+            }
 
-    if !root.is_dir() {
-        root.pop();
-    }
+            let file = file.canonicalize().unwrap();
 
-    let file = file.canonicalize().unwrap();
+            // dbg!(&root, &file);
 
-    // dbg!(&root, &file);
+            let mut root_comps = root.components();
+            let mut file_comps = file.components();
 
-    let mut root_comps = root.components();
-    let mut file_comps = file.components();
+            // let mut zipped = (&mut root_comps).zip(&mut file_comps);
 
-    // let mut zipped = (&mut root_comps).zip(&mut file_comps);
+            let (_a, b) = loop {
+                let a = root_comps.next();
+                let Some(a) = a else {
+                    // root parent of file"
+                    return RelativePath::new(&file_comps.as_path().to_string_lossy()).to_owned();
+                };
+                let b = file_comps.next();
+                let Some(b) = b else {
+                    // "file parent of root"
+                    let mut out = RelativePathBuf::new();
+                    out.push("..");
+                    for _ in root_comps {
+                        out.push("..");
+                    }
+                    return out;
+                };
 
-    let (_a, b) = loop {
-        let a = root_comps.next();
-        let Some(a) = a else {
-            // root parent of file"
-            return RelativePath::new(&file_comps.as_path().to_string_lossy()).to_owned();
-        };
-        let b = file_comps.next();
-        let Some(b) = b else {
-            // "file parent of root"
+                if a != b {
+                    // dbg!(a, b);
+                    break (a, b);
+                }
+            };
+
+            // at least one directory down, then up
+
             let mut out = RelativePathBuf::new();
+
             out.push("..");
+
             for _ in root_comps {
                 out.push("..");
             }
-            return out;
-        };
 
-        if a != b {
-            // dbg!(a, b);
-            break (a, b);
+            out.push(&*b.as_os_str().to_string_lossy());
+
+            out.push(RelativePath::new(&file_comps.as_path().to_string_lossy()));
+
+            out
         }
-    };
 
-    // at least one directory down, then up
-
-    let mut out = RelativePathBuf::new();
-
-    out.push("..");
-
-    for _ in root_comps {
-        out.push("..");
+        let file = self.as_ref();
+        let root = root.as_ref();
+        get_relative_path(root, file)
     }
-
-    out.push(&*b.as_os_str().to_string_lossy());
-
-    out.push(RelativePath::new(&file_comps.as_path().to_string_lossy()));
-
-    out
 }
+
+
 
 #[cfg(test)]
 mod test {
-    use std::path::Path;
+    use relative_path::RelativePath;
 
-use relative_path::RelativePath;
-
-use crate::scene::get_relative_path;
+    use crate::scene::PathExt;
 
     #[test]
     fn test_get_relative_path() {
         assert_eq!(
-            get_relative_path(
-                &Path::new("."),
-                &Path::new("Cargo.lock")
-            ),
+            "Cargo.lock".relative_to("."),
             RelativePath::new("Cargo.lock")
         );
 
         assert_eq!(
-            get_relative_path(
-                &Path::new("Cargo.toml"),
-                &Path::new("Cargo.lock")
-            ),
+            "Cargo.lock".relative_to("Cargo.toml"),
             RelativePath::new("Cargo.lock")
         );
 
         assert_eq!(
-            get_relative_path(
-                &Path::new("src/main.rs"),
-                &Path::new(".")
-            ),
+            ".".relative_to("src/main.rs"),
             RelativePath::new("..")
         );
 
         assert_eq!(
-            get_relative_path(
-                &Path::new("src/main.rs"),
-                &Path::new("Cargo.lock")
-            ),
+            "Cargo.lock".relative_to("src/main.rs"),
             RelativePath::new("../Cargo.lock")
         );
     }

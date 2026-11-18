@@ -25,7 +25,7 @@ use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
-use crate::{CubeTileFace, TileFace, scene::get_relative_path};
+use crate::{CubeTileFace, TileFace, scene::PathExt};
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -283,7 +283,7 @@ impl TilemapData {
                 // dbg!(&img.path, );
                 let img_path = img.path.to_logical_path(scene_dir);
                 // dbg!(&img_path);
-                let export_to_img = get_relative_path(path, &img_path);
+                let export_to_img = img_path.relative_to(path);
                 export_to_img.to_string()
             });
         // let image_path = format!("../assets/{}", image_path);
