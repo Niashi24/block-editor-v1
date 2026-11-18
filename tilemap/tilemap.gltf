@@ -3,38 +3,38 @@
     {
       "bufferView": 0,
       "byteOffset": 0,
-      "count": 6032,
+      "count": 5752,
       "componentType": 5126,
       "type": "VEC3",
       "min": [
-        -22.0,
+        -10.0,
         -4.371138828673793e-8,
-        1.0
+        -9.0
       ],
       "max": [
-        10.0,
-        11.0,
-        24.0
+        27.0,
+        7.0,
+        2.0
       ]
     },
     {
       "bufferView": 0,
       "byteOffset": 12,
-      "count": 6032,
+      "count": 5752,
       "componentType": 5126,
       "type": "VEC3"
     },
     {
       "bufferView": 0,
       "byteOffset": 24,
-      "count": 6032,
+      "count": 5752,
       "componentType": 5126,
       "type": "VEC2"
     },
     {
       "bufferView": 1,
       "byteOffset": 0,
-      "count": 9048,
+      "count": 8628,
       "componentType": 5125,
       "type": "SCALAR"
     }
@@ -44,33 +44,34 @@
   },
   "buffers": [
     {
-      "byteLength": 229216,
+      "byteLength": 218576,
       "uri": "buffer0.bin"
     }
   ],
   "bufferViews": [
     {
       "buffer": 0,
-      "byteLength": 193024,
+      "byteLength": 184064,
       "byteOffset": 0,
       "byteStride": 32,
       "target": 34962
     },
     {
       "buffer": 0,
-      "byteLength": 36192,
-      "byteOffset": 193024,
+      "byteLength": 34512,
+      "byteOffset": 184064,
       "target": 34963
     }
   ],
   "images": [
     {
-      "uri": "../assets/atlas.png"
+      "uri": "../atlas.png/"
     }
   ],
   "materials": [
     {
-      "alphaMode": "BLEND",
+      "alphaCutoff": 0.5,
+      "alphaMode": "MASK",
       "doubleSided": false,
       "pbrMetallicRoughness": {
         "baseColorFactor": [

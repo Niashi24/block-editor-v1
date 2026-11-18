@@ -4836,7 +4836,7 @@
             ),
         },
         image: Some((
-            path: "atlas.png",
+            path: "../atlas.png",
             image_width: 160,
             image_height: 110,
             tile_width: 16,

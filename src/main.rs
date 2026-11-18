@@ -7,7 +7,7 @@
 mod scene;
 mod tilemap;
 
-use std::sync::Arc;
+use std::{env::current_dir, path::Path, sync::Arc};
 
 use bevy::{
     camera::{RenderTarget, Viewport, visibility::RenderLayers}, color::palettes, dev_tools::infinite_grid::{InfiniteGrid, InfiniteGridPlugin, InfiniteGridSettings}, feathers::{FeathersPlugins, controls::FeathersButton, dark_theme::create_dark_theme, display::caption, theme::UiTheme}, input::mouse::{AccumulatedMouseMotion, AccumulatedMouseScroll}, math::NormedVectorSpace, picking::backend::{
@@ -22,7 +22,7 @@ use bevy_inspector_egui::{quick::WorldInspectorPlugin};
 use bevy_egui::EguiPlugin;
 
 use crate::{
-    TileFace::InfinitePlane, scene::{History, NewScene, Redo, ScenePlugin, Undo}, tilemap::{FaceData, TileData, TileType, Tilemap, tilemap_coord_to_center},
+    TileFace::InfinitePlane, scene::{EditorData, History, NewScene, Redo, ScenePlugin, Undo}, tilemap::{FaceData, TileData, TileType, Tilemap, tilemap_coord_to_center},
 };
 
 const VIEWPORT_RENDER_LAYER: RenderLayers = RenderLayers::layer(0);
@@ -31,7 +31,13 @@ const TILESET_RENDER_LAYER: RenderLayers = RenderLayers::layer(1);
 fn main() {
     App::new()
         .add_plugins((
-            DefaultPlugins.set(ImagePlugin::default_nearest()),
+            DefaultPlugins
+                .set(ImagePlugin::default_nearest())
+                .set(AssetPlugin {
+                    file_path: current_dir().unwrap().to_string_lossy().to_string(),
+                    unapproved_path_mode: bevy::asset::UnapprovedPathMode::Allow,
+                    ..default()
+                }),
             InfiniteGridPlugin,
             ScenePlugin,
             EguiPlugin::default(),
@@ -301,9 +307,15 @@ fn keyboard_funcs(
     input: Res<ButtonInput<KeyCode>>,
     mut commands: Commands,
     ui_surface: Res<UiSurface>,
+    editor_data: Res<EditorData>,
 ) {
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyE) {
-        tilemap_entity.1.data.export();
+        if let Some(scene_path) = editor_data.scene_path() {
+            tilemap_entity.1.data.export(Path::new("tilemap/tilemap.gltf"), scene_path.parent().unwrap());
+        } else {
+            tilemap_entity.1.data.export(Path::new("tilemap/tilemap.gltf"), current_dir().unwrap().as_path());
+
+        }
     }
 
     if input.pressed(KeyCode::ControlLeft) && input.just_pressed(KeyCode::KeyZ) {
@@ -862,19 +874,19 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
             }
             BackgroundColor(Color::srgb_u8(76, 70, 66))
             Children [
-                // @FeathersButton {
-                //     @caption: bsn! { @caption("New") }
-                // }
-                // on(|_: On<Activate>, mut commands: Commands| {
-                //     commands.trigger(NewScene);
-                // })
-                // --
-                // @FeathersButton {
-                //     @caption: bsn! { @caption("Open") }
-                // }
-                // on(|_: On<Activate>| {
-                //     println!("Open");
-                // })
+                @FeathersButton {
+                    @caption: bsn! { @caption("New") }
+                }
+                on(|_: On<Activate>, mut commands: Commands| {
+                    commands.trigger(NewScene);
+                })
+                --
+                @FeathersButton {
+                    @caption: bsn! { @caption("Open") }
+                }
+                on(|_: On<Activate>| {
+                    println!("Open");
+                })
                 // --
                 // @nav_button("icons/save.png")
                 // --
@@ -896,83 +908,88 @@ fn setup_system(mut commands: Commands, mesh_data: Res<MeshData>, asset_server: 
                 }
                 --
                 // tile_node
-                Node {
-                    height: Val::Percent(100.0),
-                    max_width: percent(50.0),
-                    flex_grow: 1.0,
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                }
-                BackgroundColor(Color::WHITE)
-                Children [
-                    BackgroundColor(Color::srgb_u8(76, 70, 66))
-                    Node {
-                        width: percent(100.0),
-                        height: px(440),
-                    }
-                    ImageNode {
-                        image: "atlas.png"
-                    }
-                    TileHighlight {
-                        selected_outline: #TileActiveOutline,
-                        hovered_outline: #TileOutline,
-                    }
-                    on(|e: On<PointerMove>, tile: Query<&TileHighlight>, mut node: Query<&mut Node>| {
-                        let highlight = tile.get(e.entity).unwrap();
-                        dbg!(e.hit.camera);
-                        let mut node = node.get_mut(highlight.hovered_outline).unwrap();
+                // Node {
+                //     height: Val::Percent(100.0),
+                //     max_width: percent(50.0),
+                //     flex_grow: 1.0,
+                //     flex_direction: FlexDirection::Column,
+                //     align_items: AlignItems::Center,
+                //     justify_content: JustifyContent::Center,
+                // }
+                // BackgroundColor(Color::WHITE)
+                // Children [
+                //     BackgroundColor(Color::srgb_u8(76, 70, 66))
+                //     Node {
+                //         width: percent(100.0),
+                //         height: px(440),
+                //     }
+                //     ImageNode {
+                //         image: "atlas.png"
+                //     }
+                //     TileHighlight {
+                //         selected_outline: #TileActiveOutline,
+                //         hovered_outline: #TileOutline,
+                //     }
+                //     on(|e: On<PointerMove>, tile: Query<&TileHighlight>, mut node: Query<&mut Node>| {
+                //         let highlight = tile.get(e.entity).unwrap();
+                //         dbg!(e.hit.camera);
+                //         let mut node = node.get_mut(highlight.hovered_outline).unwrap();
 
-                        let uv = e.hit.position.unwrap().truncate() + Vec2::splat(0.5);
-                        let uv_i = (uv * 10.0).as_ivec2();
+                //         let uv = e.hit.position.unwrap().truncate() + Vec2::splat(0.5);
+                //         let uv_i = (uv * 10.0).as_ivec2();
 
-                        node.top = percent((uv_i.y as f32) * 10.0);
-                        node.left = percent((uv_i.x as f32) * 10.0);
-                    })
-                    on(|e: On<PointerPress>, tile: Query<&TileHighlight>, mut node: Query<&mut Node>| {
-                        let highlight = tile.get(e.entity).unwrap();
-                        dbg!(e.hit.camera);
-                        let mut node = node.get_mut(highlight.hovered_outline).unwrap();
+                //         node.top = percent((uv_i.y as f32) * 10.0);
+                //         node.left = percent((uv_i.x as f32) * 10.0);
+                //     })
+                //     on(|e: On<PointerPress>, tile: Query<&TileHighlight>, mut node: Query<&mut Node>| {
+                //         let highlight = tile.get(e.entity).unwrap();
+                //         dbg!(e.hit.camera);
+                //         let mut node = node.get_mut(highlight.hovered_outline).unwrap();
 
-                        let uv = e.hit.position.unwrap().truncate() + Vec2::splat(0.5);
-                        let uv_i = (uv * 10.0).as_ivec2();
+                //         let uv = e.hit.position.unwrap().truncate() + Vec2::splat(0.5);
+                //         let uv_i = (uv * 10.0).as_ivec2();
 
-                        node.top = percent((uv_i.y as f32) * 10.0);
-                        node.left = percent((uv_i.x as f32) * 10.0);
-                    })
-                    Children [
-                        #TileOutline
-                        Node {
-                            position_type: PositionType::Absolute,
-                            width: percent(10.0),
-                            height: percent(10.0),
-                        }
-                        Outline {
-                            width: px(2),
-                            color: Color::srgb_u8(255, 0, 0),
-                        }
-                        Pickable::IGNORE
-                        --
-                        #TileActiveOutline
-                        Node {
-                            position_type: PositionType::Absolute,
-                            width: percent(10.0),
-                            height: percent(10.0),
-                        }
-                        Outline {
-                            width: px(2),
-                            color: Color::srgb_u8(255, 0, 0),
-                        }
-                        Pickable::IGNORE
-                    ]
-                ]
+                //         node.top = percent((uv_i.y as f32) * 10.0);
+                //         node.left = percent((uv_i.x as f32) * 10.0);
+                //     })
+                //     Children [
+                //         #TileOutline
+                //         Node {
+                //             position_type: PositionType::Absolute,
+                //             width: percent(10.0),
+                //             height: percent(10.0),
+                //         }
+                //         Outline {
+                //             width: px(2),
+                //             color: Color::srgb_u8(255, 0, 0),
+                //         }
+                //         Pickable::IGNORE
+                //         --
+                //         #TileActiveOutline
+                //         Node {
+                //             position_type: PositionType::Absolute,
+                //             width: percent(10.0),
+                //             height: percent(10.0),
+                //         }
+                //         Outline {
+                //             width: px(2),
+                //             color: Color::srgb_u8(255, 0, 0),
+                //         }
+                //         Pickable::IGNORE
+                //     ]
+                // ]
             ]
             --
         ]
     });
 }
 
+pub fn tile_picker() -> impl Scene {
 
+    bsn! {
+        Node
+    }
+}
 
 
 pub fn intersect_plane_full(

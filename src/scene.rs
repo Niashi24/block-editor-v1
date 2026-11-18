@@ -1,14 +1,11 @@
 use std::{
-    collections::VecDeque,
-    fs::File,
-    io::{BufWriter, ErrorKind},
-    path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    collections::VecDeque, env::current_dir, fs::File, io::{BufWriter, ErrorKind}, path::{Path, PathBuf}, sync::{Arc, Mutex},
 };
 
 use bevy::{
     app::{Plugin, PostStartup, Update}, asset::AssetServer, camera::Camera, ecs::prelude::*, image::Image, input::{ButtonInput, keyboard::KeyCode}, math::{Isometry3d, Quat}, pbr::{MeshMaterial3d, StandardMaterial}, tasks::AsyncComputeTaskPool, transform::components::Transform, utils::default,
 };
+use relative_path::{RelativePath, RelativePathBuf};
 use ron::{extensions::Extensions, ser::PrettyConfig};
 use serde::{Deserialize, Serialize};
 use snafu::{ResultExt, Whatever, whatever};
@@ -174,7 +171,12 @@ impl ScenePlugin {
         *tilemap = Tilemap::default();
 
         let img = match &tilemap_data.image {
-            Some(img) => asset_server.load::<Image>(&img.path),
+            Some(img) => {
+                let img_path = img.path.to_path(path);
+                // dbg!(&img_path);
+                // let asset_path = get_relative_path(&current_dir().unwrap().into_boxed_path(), &img_path).to_string();
+                asset_server.load::<Image>(img_path)
+            },
             None => asset_server.load("PrototypeTextures/texture_08.png"),
         };
 
@@ -292,6 +294,11 @@ impl EditorData {
         self.save_data.recent_scenes.retain(|x| x != &path);
         self.save_data.recent_scenes.push_front(path);
         self.save_data.save();
+    }
+
+    pub fn scene_path(&self) -> Option<&Path> {
+        self.current_scene_path.as_ref()
+            .map(|p| p.as_path())
     }
 }
 
@@ -411,5 +418,107 @@ impl Scene {
             .with_whatever_context(|err| format!("deserialize ron: {err}"))?;
 
         Ok(scene)
+    }
+}
+
+
+pub fn get_relative_path(mut root: &Path, file: &Path) -> RelativePathBuf {
+
+    let mut root = root.canonicalize().unwrap();
+
+    if !root.is_dir() {
+        root.pop();
+    }
+
+    let file = file.canonicalize().unwrap();
+
+    // dbg!(&root, &file);
+
+    let mut root_comps = root.components();
+    let mut file_comps = file.components();
+
+    // let mut zipped = (&mut root_comps).zip(&mut file_comps);
+
+    let (_a, b) = loop {
+        let a = root_comps.next();
+        let Some(a) = a else {
+            // root parent of file"
+            return RelativePath::new(&file_comps.as_path().to_string_lossy()).to_owned();
+        };
+        let b = file_comps.next();
+        let Some(b) = b else {
+            // "file parent of root"
+            let mut out = RelativePathBuf::new();
+            out.push("..");
+            for _ in root_comps {
+                out.push("..");
+            }
+            return out;
+        };
+
+        if a != b {
+            // dbg!(a, b);
+            break (a, b);
+        }
+    };
+
+    // at least one directory down, then up
+
+    let mut out = RelativePathBuf::new();
+
+    out.push("..");
+
+    for _ in root_comps {
+        out.push("..");
+    }
+
+    out.push(&*b.as_os_str().to_string_lossy());
+
+    out.push(RelativePath::new(&file_comps.as_path().to_string_lossy()));
+
+    out
+}
+
+#[cfg(test)]
+mod test {
+    use std::path::Path;
+
+use relative_path::RelativePath;
+
+use crate::scene::get_relative_path;
+
+    #[test]
+    fn test_get_relative_path() {
+        assert_eq!(
+            get_relative_path(
+                &Path::new("."),
+                &Path::new("Cargo.lock")
+            ),
+            RelativePath::new("Cargo.lock")
+        );
+
+        assert_eq!(
+            get_relative_path(
+                &Path::new("Cargo.toml"),
+                &Path::new("Cargo.lock")
+            ),
+            RelativePath::new("Cargo.lock")
+        );
+
+        assert_eq!(
+            get_relative_path(
+                &Path::new("src/main.rs"),
+                &Path::new(".")
+            ),
+            RelativePath::new("..")
+        );
+
+        assert_eq!(
+            get_relative_path(
+                &Path::new("src/main.rs"),
+                &Path::new("Cargo.lock")
+            ),
+            RelativePath::new("../Cargo.lock")
+        );
     }
 }

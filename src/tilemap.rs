@@ -1,7 +1,5 @@
 use std::{
-    collections::BTreeMap,
-    fs::{self},
-    io::Write,
+    collections::BTreeMap, fs::{self}, io::Write, path::Path,
 };
 
 use bevy::{
@@ -23,10 +21,11 @@ use parry3d::{
     query::Ray,
     shape::{Cuboid, FeatureId, Shape},
 };
+use relative_path::RelativePathBuf;
 use serde::{Deserialize, Serialize};
 use wgpu_types::PrimitiveTopology;
 
-use crate::{CubeTileFace, TileFace};
+use crate::{CubeTileFace, TileFace, scene::get_relative_path};
 
 pub fn tilemap_coord_to_center(coord: IVec3) -> Vec3 {
     coord.as_vec3() + Vec3::splat(0.5)
@@ -273,21 +272,27 @@ impl TilemapData {
         self.tiles.remove(&pos)
     }
 
-    pub fn export(&self) {
+    pub fn export(&self, path: &Path, scene_dir: &Path) {
         let mut root = gltf::Root::default();
 
-        let image_path = self
+        let image_path: Option<String> = self
             .image
             .as_ref()
-            .map(|img| img.path.as_str())
-            .unwrap_or("PrototypeTextures.png");
-        let image_path = format!("../assets/{}", image_path);
+            // .map(|img| img.path.to_logical_path(scene_path))
+            .map(|img| {
+                // dbg!(&img.path, );
+                let img_path = img.path.to_logical_path(scene_dir);
+                // dbg!(&img_path);
+                let export_to_img = get_relative_path(path, &img_path);
+                export_to_img.to_string()
+            });
+        // let image_path = format!("../assets/{}", image_path);
 
         let image = root.push(gltf::Image {
             buffer_view: None,
             mime_type: None,
             name: None,
-            uri: Some(image_path),
+            uri: image_path,
             extensions: Default::default(),
             extras: Default::default(),
         });
@@ -643,7 +648,7 @@ fn construct_plane_mesh(translation: Vec3, normal: Dir3, uv: [[f32; 2]; 2]) -> M
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TilemapImage {
-    pub path: String,
+    pub path: RelativePathBuf,
     pub image_width: u32,
     pub image_height: u32,
     pub tile_width: u32,

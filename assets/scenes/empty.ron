@@ -1,0 +1,20 @@
+(
+    camera: (
+        rotation: (-0.38268346, 0.0, 0.0, 0.9238795),
+        translation: (-2.7541165, 21.970545, 25.119865),
+    ),
+    history: (
+        history: [],
+        redo: [],
+    ),
+    tilemap_data: (
+        tiles: {},
+        image: Some((
+            path: "../atlas.png",
+            image_width: 160,
+            image_height: 110,
+            tile_width: 16,
+            tile_height: 11,
+        )),
+    ),
+)
